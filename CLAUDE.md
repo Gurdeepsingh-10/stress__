@@ -38,10 +38,13 @@ All commands use the venv interpreter explicitly to avoid running against global
 .venv/Scripts/python.exe -m ruff format src/ tests/ scripts/
 
 # Run inspection script
-.venv/Scripts/python.exe -I scripts/inspect_wesad.py data/raw/WESAD
+.venv/Scripts/python.exe scripts/inspect_wesad.py data/raw/WESAD
+
+# Run window report
+.venv/Scripts/python.exe scripts/report_windows.py data/raw/WESAD
 
 # Run API (when implemented)
 .venv/Scripts/python.exe -m uvicorn stress.api.main:app --reload
 ```
 
-**Convention:** Always use `.venv/Scripts/python.exe -m` for package commands and `.venv/Scripts/python.exe -I` for isolated scripts.
+**Convention:** Always use `.venv/Scripts/python.exe -m` for package commands.
