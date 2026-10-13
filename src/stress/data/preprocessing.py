@@ -7,6 +7,39 @@ import numpy as np
 from stress.data.wesad_loader import LoaderResult, load_subject
 
 
+def load_npz_subject(subject_id: int, processed_dir: Path) -> dict:
+    """Load wrist signals and labels from preprocessed .npz file.
+
+    Args:
+        subject_id: Subject ID (e.g., 2).
+        processed_dir: Path to data/processed/.
+
+    Returns:
+        Dict with keys 'wrist' (dict of BVP, EDA, TEMP, ACC), 'label' (1D uint8 array).
+
+    Raises:
+        FileNotFoundError: If .npz file does not exist.
+    """
+    processed_dir = Path(processed_dir)
+    npz_file = processed_dir / f"S{subject_id}.npz"
+
+    if not npz_file.exists():
+        raise FileNotFoundError(f"NPZ file not found: {npz_file}")
+
+    with np.load(npz_file, allow_pickle=False) as data:
+        wrist_signals = {
+            "BVP": data["BVP"],
+            "EDA": data["EDA"],
+            "TEMP": data["TEMP"],
+            "ACC": data["ACC"],
+        }
+
+        return {
+            "wrist": wrist_signals,
+            "label": data["label"],
+        }
+
+
 def preprocess_subject(subject_id: int, data_dir: Path, output_dir: Path) -> tuple[Path, bool]:
     """Load subject, validate, save wrist+labels to .npz, free memory.
 
@@ -64,10 +97,10 @@ def preprocess_all_subjects(data_dir: Path, output_dir: Path) -> dict[int, tuple
         try:
             npz_path, has_anomaly = preprocess_subject(subject_id, data_dir, output_dir)
             results[subject_id] = (npz_path, has_anomaly)
-            status = "⚠️  ANOMALY" if has_anomaly else "✓"
+            status = "WARN ANOMALY" if has_anomaly else "OK"
             print(f"{status} S{subject_id}: {npz_path}")
         except Exception as e:
-            print(f"✗ S{subject_id}: {e}")
+            print(f"ERROR S{subject_id}: {e}")
             results[subject_id] = (None, True)
 
     return results

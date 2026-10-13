@@ -184,6 +184,66 @@ def test_create_windows_valid_labels_filtering() -> None:
     for _, label in windows:
         assert label in {1, 2}, f"Expected label in {{1, 2}}, got {label}"
 
-    # Verify some windows are discarded (those with only label 0)
-    # First ~6 windows should be mostly 0s and discarded
-    print(f"Valid labels filtering: {len(windows)} windows kept")
+
+def test_create_windows_gap_between_valid_labels() -> None:
+    """Test that windows spanning a gap (label 0) are dropped even if both sides are label 1.
+
+    Structure: 200s of label 1, 200s of label 0 (gap), 200s of label 1.
+    With 60s windows and 50% overlap (30s stride):
+    - First 200s (label 1): windows start at 0, 30, 60, 90, 120 (5 windows)
+      - Window at 150s covers [150, 210) which includes 10s of label 0 → DROPPED
+    - Gap [200-400s] (label 0): all windows majority-label 0 → DROPPED
+      - Window at 390s covers [390, 450) which includes 10s of label 0 → DROPPED
+    - Last 200s (label 1): windows start at 420, 450, 480, 510, 540 (5 windows)
+
+    Total: exactly 10 valid windows (5 + 5).
+    Expected start times: {0, 30, 60, 90, 120, 420, 450, 480, 510, 540}.
+    No window should span [200, 400).
+    """
+    duration_sec = 600.0
+    labels = np.zeros(int(duration_sec * 700), dtype=np.uint8)
+    labels[: int(200 * 700)] = 1
+    labels[int(200 * 700) : int(400 * 700)] = 0
+    labels[int(400 * 700) :] = 1
+
+    # BVP encodes time in seconds (sample i has value i / 64.0)
+    n_bvp = int(duration_sec * 64)
+    bvp = np.arange(n_bvp, dtype=np.float64) / 64.0
+
+    wrist_signals = {
+        "BVP": bvp,
+        "EDA": np.ones(int(duration_sec * 4), dtype=np.float64),
+        "TEMP": np.ones(int(duration_sec * 4), dtype=np.float64),
+        "ACC": np.ones((int(duration_sec * 32), 3), dtype=np.float64),
+    }
+
+    config = WindowConfig(
+        window_seconds=60.0, overlap=0.5, purity_threshold=1.0, valid_labels={1, 2, 3}
+    )
+    windows = create_windows(wrist_signals, labels, config)
+
+    # All windows should have label 1 (no label 0)
+    for _, label in windows:
+        assert label == 1, f"Expected label 1, got {label}"
+
+    # Extract window start times from BVP values
+    # BVP[0] is the first sample time in seconds
+    window_start_times = {window_dict["BVP"][0] for window_dict, _ in windows}
+
+    expected_starts = {0.0, 30.0, 60.0, 90.0, 120.0, 420.0, 450.0, 480.0, 510.0, 540.0}
+    assert len(windows) == 10, f"Expected 10 windows, got {len(windows)}"
+    assert window_start_times == expected_starts, (
+        f"Window start times mismatch.\n"
+        f"Expected: {sorted(expected_starts)}\n"
+        f"Got: {sorted(window_start_times)}"
+    )
+
+    # Verify no window spans the gap [200, 400)
+    for window_dict, _ in windows:
+        bvp_window = window_dict["BVP"]
+        start_s = bvp_window[0]
+        end_s = bvp_window[-1]
+        # Check that [start_s, end_s] does not overlap [200, 400)
+        assert not (start_s < 400 and end_s >= 200), (
+            f"Window [{start_s}, {end_s}] spans the gap [200, 400)"
+        )

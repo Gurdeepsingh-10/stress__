@@ -64,4 +64,4 @@ mlflow.db-wal
 Thumbs.db
 
 # Logs
-*.log
+logs/
