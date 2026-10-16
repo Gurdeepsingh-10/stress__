@@ -247,3 +247,49 @@ def test_create_windows_gap_between_valid_labels() -> None:
         assert not (start_s < 400 and end_s >= 200), (
             f"Window [{start_s}, {end_s}] spans the gap [200, 400)"
         )
+
+
+def test_create_windows_default_still_returns_two_tuples() -> None:
+    """Backward compatibility: default call returns (window, label) 2-tuples."""
+    duration_sec = 600.0
+    wrist_signals = {
+        "BVP": np.ones(int(duration_sec * 64), dtype=np.float64),
+        "EDA": np.ones(int(duration_sec * 4), dtype=np.float64),
+        "TEMP": np.ones(int(duration_sec * 4), dtype=np.float64),
+        "ACC": np.ones((int(duration_sec * 32), 3), dtype=np.float64),
+    }
+    labels = np.ones(int(duration_sec * 700), dtype=np.uint8)
+
+    config = WindowConfig(window_seconds=60.0, overlap=0.5, purity_threshold=1.0)
+    windows = create_windows(wrist_signals, labels, config)
+
+    assert len(windows) == 19
+    assert all(len(window) == 2 for window in windows)
+
+
+def test_create_windows_return_starts_gives_true_grid_times() -> None:
+    """With return_starts=True, start times are grid positions, not kept-window indices.
+
+    Structure: 200s label 1, 200s label 0 (gap), 200s label 1 -> exactly 10 windows
+    survive. A naive idx * stride reconstruction would report 0..270s instead of the
+    true {0, 30, 60, 90, 120, 420, 450, 480, 510, 540} seconds.
+    """
+    duration_sec = 600.0
+    labels = np.zeros(int(duration_sec * 700), dtype=np.uint8)
+    labels[: int(200 * 700)] = 1
+    labels[int(200 * 700) : int(400 * 700)] = 0
+    labels[int(400 * 700) :] = 1
+
+    wrist_signals = {
+        "BVP": np.ones(int(duration_sec * 64), dtype=np.float64),
+        "EDA": np.ones(int(duration_sec * 4), dtype=np.float64),
+        "TEMP": np.ones(int(duration_sec * 4), dtype=np.float64),
+        "ACC": np.ones((int(duration_sec * 32), 3), dtype=np.float64),
+    }
+
+    config = WindowConfig(window_seconds=60.0, overlap=0.5, purity_threshold=1.0)
+    windows = create_windows(wrist_signals, labels, config, return_starts=True)
+
+    assert all(len(window) == 3 for window in windows)
+    starts = [start_s for _, _, start_s in windows]
+    assert starts == [0.0, 30.0, 60.0, 90.0, 120.0, 420.0, 450.0, 480.0, 510.0, 540.0]

@@ -38,7 +38,8 @@ def create_windows(
     wrist_signals: dict[str, np.ndarray],
     labels: np.ndarray,
     config: WindowConfig,
-) -> list[tuple[dict[str, np.ndarray], int]]:
+    return_starts: bool = False,
+) -> list[tuple[dict[str, np.ndarray], int]] | list[tuple[dict[str, np.ndarray], int, float]]:
     """Create aligned windows from wrist signals and compute label purity.
 
     Algorithm:
@@ -54,9 +55,11 @@ def create_windows(
         wrist_signals: Dict with 'BVP', 'EDA', 'TEMP' (1D), 'ACC' (Nx3).
         labels: 1D label array at 700 Hz.
         config: WindowConfig with window_seconds, overlap, purity_threshold, valid_labels.
+        return_starts: If True, return window start times in seconds as third tuple element.
 
     Returns:
-        List of (wrist_window_dict, label) tuples.
+        If return_starts is False: List of (wrist_window_dict, label) tuples.
+        If return_starts is True: List of (wrist_window_dict, label, start_s) tuples.
     """
     # Reference signal: BVP at 64 Hz
     bvp = wrist_signals["BVP"]
@@ -126,7 +129,10 @@ def create_windows(
 
             # Keep window if label is valid and purity >= threshold
             if majority_label in config.valid_labels and purity >= config.purity_threshold:
-                windows.append((window_dict, int(majority_label)))
+                if return_starts:
+                    windows.append((window_dict, int(majority_label), start_time_sec))
+                else:
+                    windows.append((window_dict, int(majority_label)))
 
         window_idx += 1
 
