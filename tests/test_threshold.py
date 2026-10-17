@@ -75,3 +75,11 @@ def test_every_calibration_window_predicted_not_stress() -> None:
     cal_preds = predict_with_threshold(p_cal, theta)
     # Every calibration baseline window must be predicted 0 (not-stress)
     np.testing.assert_array_equal(cal_preds, np.zeros_like(cal_preds))
+
+
+def test_strict_inequality_at_boundary() -> None:
+    """A score just above theta is predicted stress; a score equal to theta is not."""
+    theta = 0.65
+    scores = np.array([theta - 1e-9, theta, theta + 1e-9])
+    preds = predict_with_threshold(scores, theta=theta)
+    np.testing.assert_array_equal(preds, np.array([0, 0, 1]))

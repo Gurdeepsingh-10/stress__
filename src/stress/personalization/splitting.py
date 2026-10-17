@@ -71,8 +71,8 @@ def split_calibration_and_test(
         k: Calibration window count for the current condition (0 <= k <= k_max).
         k_max: Maximum calibration window count defining the fixed excluded buffer (default: 10).
         window_seconds: Length of a window in seconds (default: 60.0).
-        target_col: Label column name (default: 'label_binary').
-        baseline_val: Value corresponding to baseline class (default: 0).
+        target_col: Label column name (default: 'label_3class').
+        baseline_val: Value corresponding to baseline class (default: 1).
         time_col: Timestamp column name for window start (default: 'window_start_s').
 
     Returns:

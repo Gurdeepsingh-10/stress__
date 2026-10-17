@@ -205,4 +205,3 @@ def test_centering_preserves_within_subject_differences_and_variance() -> None:
         orig_delta = float(df[col].iloc[15] - df[col].iloc[0])
         cent_delta = float(centered_df[col].iloc[15] - centered_df[col].iloc[0])
         np.testing.assert_allclose(cent_delta, orig_delta, atol=1e-12)
-
