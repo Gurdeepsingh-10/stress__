@@ -36,7 +36,7 @@ def create_synthetic_subject(
     eda = [1.5 + 0.1 * (i % 4) for i in range(n_baseline)] + [
         4.0 + 0.2 * (i % 4) for i in range(n_stress)
     ]
-    acc = [0.95] * n_total
+    acc = [0.95 + 0.05 * (i % 3) for i in range(n_total)]
 
     return pd.DataFrame(
         {
@@ -174,3 +174,35 @@ def test_nan_calibration_mean_sets_feature_to_nan_for_imputation() -> None:
     assert centered_test["eda_mean"].isna().all()
     # Other features centered normally
     assert not centered_test["hrv_mean_hr"].isna().any()
+
+
+def test_centering_preserves_within_subject_differences_and_variance() -> None:
+    """Centering must preserve within-subject differences and standard deviations.
+
+    Centering shifts feature values by a constant (the calibration baseline mean);
+    it never rescales them. Therefore:
+    - Pairwise differences between any two windows are unchanged.
+    - Standard deviation of each feature across windows is unchanged.
+    """
+    df = create_synthetic_subject()
+    split = split_calibration_and_test(df, k=5, k_max=10)
+    cal_mean = compute_calibration_mean(split.cal_df, FEATURE_COLS)
+    centered_df = center_features(df, cal_mean, FEATURE_COLS)
+
+    for col in FEATURE_COLS:
+        # Standard deviation must be bitwise/numerically unchanged
+        orig_std = float(df[col].std())
+        cent_std = float(centered_df[col].std())
+        assert cent_std > 0.0, f"Expected non-zero std for {col}"
+        np.testing.assert_allclose(cent_std, orig_std, rtol=1e-12)
+
+        # Pairwise differences between consecutive windows must be exact
+        orig_diffs = np.diff(df[col].to_numpy())
+        cent_diffs = np.diff(centered_df[col].to_numpy())
+        np.testing.assert_allclose(cent_diffs, orig_diffs, atol=1e-12)
+
+        # Arbitrary pairwise differences across windows (e.g. window 0 vs window 15)
+        orig_delta = float(df[col].iloc[15] - df[col].iloc[0])
+        cent_delta = float(centered_df[col].iloc[15] - centered_df[col].iloc[0])
+        np.testing.assert_allclose(cent_delta, orig_delta, atol=1e-12)
+
