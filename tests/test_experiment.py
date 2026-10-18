@@ -213,6 +213,7 @@ def test_fold_never_fits_on_held_out_subject(monkeypatch: pytest.MonkeyPatch) ->
     df = make_synthetic_dataset(n_subjects=4, n_windows=40, seed=321)
 
     import stress.personalization.experiment as exp_mod
+
     original_build = exp_mod.build_pipeline
 
     fitted_train_indices: list[pd.Index] = []

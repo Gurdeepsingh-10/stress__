@@ -189,4 +189,3 @@ def test_calibration_never_selects_amusement_even_if_earlier() -> None:
     assert split.cal_df["window_start_s"].min() == 150.0
     # No amusement window in calibration
     assert 3 not in split.cal_df["label_3class"].values
-

@@ -16,10 +16,23 @@ from stress.models.loso import LOSOResult
 # Canonical feature columns (must match FEATURE_GROUPS)
 # ---------------------------------------------------------------------------
 _FEATURE_COLS: list[str] = [
-    "hrv_mean_hr", "hrv_hr_std", "hrv_sdnn", "hrv_rmssd", "hrv_pnn50", "hrv_num_beats",
-    "eda_mean", "eda_std", "eda_min", "eda_max", "eda_slope", "eda_num_peaks",
-    "temp_mean", "temp_std", "temp_slope",
-    "acc_magnitude_mean", "acc_magnitude_std",
+    "hrv_mean_hr",
+    "hrv_hr_std",
+    "hrv_sdnn",
+    "hrv_rmssd",
+    "hrv_pnn50",
+    "hrv_num_beats",
+    "eda_mean",
+    "eda_std",
+    "eda_min",
+    "eda_max",
+    "eda_slope",
+    "eda_num_peaks",
+    "temp_mean",
+    "temp_std",
+    "temp_slope",
+    "acc_magnitude_mean",
+    "acc_magnitude_std",
 ]
 
 
@@ -51,8 +64,7 @@ def _make_feature_csv(path: Path, n_subjects: int = 3, windows_per_subject: int 
     return path
 
 
-def _make_feature_parquet(path: Path, n_subjects: int = 3,
-                           windows_per_subject: int = 8) -> Path:
+def _make_feature_parquet(path: Path, n_subjects: int = 3, windows_per_subject: int = 8) -> Path:
     """Write a minimal synthetic feature Parquet for format tests."""
     rng = np.random.default_rng(1)
     rows = []
@@ -174,32 +186,42 @@ def test_main_end_to_end_returns_0(tmp_path: Path, capsys: pytest.CaptureFixture
     Uses a small synthetic dataset (3 subjects, 8 windows each) so the full
     (model x group) grid finishes quickly.  MLflow is redirected to a temp DB.
     """
-    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3,
-                                 windows_per_subject=8)
+    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3, windows_per_subject=8)
     mlflow_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
 
-    exit_code = main([
-        "--features", str(csv_path),
-        "--target", "label_binary",
-        "--experiment", "test_main",
-        "--mlflow-uri", mlflow_uri,
-    ])
+    exit_code = main(
+        [
+            "--features",
+            str(csv_path),
+            "--target",
+            "label_binary",
+            "--experiment",
+            "test_main",
+            "--mlflow-uri",
+            mlflow_uri,
+        ]
+    )
 
     assert exit_code == 0
 
 
 def test_main_prints_results_table(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """main() must print the LOSO results table header to stdout."""
-    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3,
-                                 windows_per_subject=6)
+    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3, windows_per_subject=6)
     mlflow_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
 
-    main([
-        "--features", str(csv_path),
-        "--target", "label_binary",
-        "--experiment", "test_print",
-        "--mlflow-uri", mlflow_uri,
-    ])
+    main(
+        [
+            "--features",
+            str(csv_path),
+            "--target",
+            "label_binary",
+            "--experiment",
+            "test_print",
+            "--mlflow-uri",
+            mlflow_uri,
+        ]
+    )
 
     captured = capsys.readouterr()
     assert "LOSO Baseline Results" in captured.out
@@ -211,17 +233,22 @@ def test_main_logs_runs_to_mlflow(tmp_path: Path) -> None:
 
     3 models x 5 groups (hrv, eda, temp, acc, all) = 15 runs.
     """
-    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3,
-                                 windows_per_subject=6)
+    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3, windows_per_subject=6)
     mlflow_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     experiment_name = "test_runs_count"
 
-    main([
-        "--features", str(csv_path),
-        "--target", "label_binary",
-        "--experiment", experiment_name,
-        "--mlflow-uri", mlflow_uri,
-    ])
+    main(
+        [
+            "--features",
+            str(csv_path),
+            "--target",
+            "label_binary",
+            "--experiment",
+            experiment_name,
+            "--mlflow-uri",
+            mlflow_uri,
+        ]
+    )
 
     mlflow.set_tracking_uri(mlflow_uri)
     client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_uri)
@@ -234,17 +261,22 @@ def test_main_logs_runs_to_mlflow(tmp_path: Path) -> None:
 
 def test_main_all_runs_have_macro_f1_metric(tmp_path: Path) -> None:
     """Every MLflow run created by main() must record a macro_f1 metric."""
-    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3,
-                                 windows_per_subject=6)
+    csv_path = _make_feature_csv(tmp_path / "features.csv", n_subjects=3, windows_per_subject=6)
     mlflow_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     experiment_name = "test_metric_presence"
 
-    main([
-        "--features", str(csv_path),
-        "--target", "label_binary",
-        "--experiment", experiment_name,
-        "--mlflow-uri", mlflow_uri,
-    ])
+    main(
+        [
+            "--features",
+            str(csv_path),
+            "--target",
+            "label_binary",
+            "--experiment",
+            experiment_name,
+            "--mlflow-uri",
+            mlflow_uri,
+        ]
+    )
 
     mlflow.set_tracking_uri(mlflow_uri)
     client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_uri)

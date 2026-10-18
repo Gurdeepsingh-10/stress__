@@ -158,10 +158,7 @@ def main(argv: list[str] | None = None) -> int:
                 log_loso_result(result, args.target)
 
             all_results.append(result)
-            print(
-                f"    macro_F1={result.macro_f1:.4f}"
-                f"  recalls={result.per_class_recall}"
-            )
+            print(f"    macro_F1={result.macro_f1:.4f}  recalls={result.per_class_recall}")
 
     print("\n=== LOSO Baseline Results ===")
     summary = summarize_results(all_results)
