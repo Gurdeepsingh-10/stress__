@@ -164,8 +164,11 @@ def test_build_pipeline_returns_unfitted_pipeline() -> None:
 def test_build_pipeline_seed_is_forwarded() -> None:
     """Two pipelines with the same seed must produce the same predictions."""
     df = _make_df(n_subjects=3, windows_per_subject=8, seed=99)
-    feature_cols = [c for c in df.columns if c not in ("subject", "window_start_s",
-                                                        "label_3class", "label_binary")]
+    feature_cols = [
+        c
+        for c in df.columns
+        if c not in ("subject", "window_start_s", "label_3class", "label_binary")
+    ]
 
     x_arr = df[feature_cols].to_numpy(dtype=float)
     y = df["label_binary"].to_numpy()
@@ -194,8 +197,9 @@ def test_run_loso_fold_returns_fold_result() -> None:
     df = _make_df(n_subjects=3)
     pipe = build_pipeline("dummy")
 
-    result = run_loso_fold(df, test_subject=1, feature_cols=_FEATURE_COLS,
-                           target_col="label_binary", pipeline=pipe)
+    result = run_loso_fold(
+        df, test_subject=1, feature_cols=_FEATURE_COLS, target_col="label_binary", pipeline=pipe
+    )
 
     assert isinstance(result, FoldResult)
 
@@ -205,8 +209,9 @@ def test_run_loso_fold_correct_subject_id() -> None:
     df = _make_df(n_subjects=3)
     pipe = build_pipeline("dummy")
 
-    result = run_loso_fold(df, test_subject=2, feature_cols=_FEATURE_COLS,
-                           target_col="label_binary", pipeline=pipe)
+    result = run_loso_fold(
+        df, test_subject=2, feature_cols=_FEATURE_COLS, target_col="label_binary", pipeline=pipe
+    )
 
     assert result.subject_id == 2
 
@@ -217,8 +222,9 @@ def test_run_loso_fold_predictions_match_test_window_count() -> None:
     df = _make_df(n_subjects=4, windows_per_subject=windows_per_subject)
     pipe = build_pipeline("dummy")
 
-    result = run_loso_fold(df, test_subject=3, feature_cols=_FEATURE_COLS,
-                           target_col="label_binary", pipeline=pipe)
+    result = run_loso_fold(
+        df, test_subject=3, feature_cols=_FEATURE_COLS, target_col="label_binary", pipeline=pipe
+    )
 
     assert len(result.y_pred) == windows_per_subject
     assert len(result.y_true) == windows_per_subject
@@ -238,8 +244,9 @@ def test_run_loso_fold_training_excludes_test_subject() -> None:
     df.loc[df["subject"] == 1, col] = 1000.0
 
     pipe = build_pipeline("logistic")
-    run_loso_fold(df, test_subject=1, feature_cols=_FEATURE_COLS,
-                  target_col="label_binary", pipeline=pipe)
+    run_loso_fold(
+        df, test_subject=1, feature_cols=_FEATURE_COLS, target_col="label_binary", pipeline=pipe
+    )
 
     scaler_mean = pipe.named_steps["scaler"].mean_
     feat_idx = _FEATURE_COLS.index(col)
@@ -262,8 +269,9 @@ def test_run_loso_fold_imputer_fills_nan_from_training() -> None:
     df.loc[df["subject"] == 1, hrv_cols] = np.nan
 
     pipe = build_pipeline("logistic")
-    result = run_loso_fold(df, test_subject=1, feature_cols=_FEATURE_COLS,
-                           target_col="label_binary", pipeline=pipe)
+    result = run_loso_fold(
+        df, test_subject=1, feature_cols=_FEATURE_COLS, target_col="label_binary", pipeline=pipe
+    )
 
     # Predictions must be finite integers, not NaN
     assert not np.any(np.isnan(result.y_pred.astype(float)))
@@ -281,8 +289,9 @@ def test_run_loso_fold_empty_training_raises() -> None:
     pipe = build_pipeline("dummy")
 
     with pytest.raises(ValueError, match="Empty training set"):
-        run_loso_fold(df, test_subject=1, feature_cols=_FEATURE_COLS,
-                      target_col="label_binary", pipeline=pipe)
+        run_loso_fold(
+            df, test_subject=1, feature_cols=_FEATURE_COLS, target_col="label_binary", pipeline=pipe
+        )
 
 
 def test_run_loso_fold_unknown_test_subject_raises() -> None:
@@ -291,8 +300,13 @@ def test_run_loso_fold_unknown_test_subject_raises() -> None:
     pipe = build_pipeline("dummy")
 
     with pytest.raises(ValueError, match="No test windows"):
-        run_loso_fold(df, test_subject=99, feature_cols=_FEATURE_COLS,
-                      target_col="label_binary", pipeline=pipe)
+        run_loso_fold(
+            df,
+            test_subject=99,
+            feature_cols=_FEATURE_COLS,
+            target_col="label_binary",
+            pipeline=pipe,
+        )
 
 
 # ===========================================================================
@@ -496,8 +510,7 @@ def test_summarize_results_macro_f1_matches_loso_result() -> None:
 def test_summarize_results_model_name_matches() -> None:
     """'model' column in summary must match LOSOResult.model_name."""
     df = _make_df(n_subjects=3)
-    result = run_loso(df, _FEATURE_COLS, "label_binary", "random_forest",
-                      feature_group="eda")
+    result = run_loso(df, _FEATURE_COLS, "label_binary", "random_forest", feature_group="eda")
 
     summary = summarize_results([result])
 
