@@ -96,6 +96,33 @@ def test_physiological_range_validation(field: str, bad_value: float, match_str:
         PredictRequest(**data)
 
 
+def test_hrv_sdnn_rmssd_extended_ranges() -> None:
+    """Observed high values from peak artifacts pass; values above 10000.0 are rejected."""
+    # 6800.7 passes for hrv_rmssd
+    data = valid_payload_dict()
+    data["hrv_rmssd"] = 6800.7
+    req = PredictRequest(**data)
+    assert req.hrv_rmssd == 6800.7
+
+    # 4771.3 passes for hrv_sdnn
+    data = valid_payload_dict()
+    data["hrv_sdnn"] = 4771.3
+    req = PredictRequest(**data)
+    assert req.hrv_sdnn == 4771.3
+
+    # 10000.1 is rejected for hrv_rmssd
+    data = valid_payload_dict()
+    data["hrv_rmssd"] = 10000.1
+    with pytest.raises(ValidationError, match="less_than_equal"):
+        PredictRequest(**data)
+
+    # 10000.1 is rejected for hrv_sdnn
+    data = valid_payload_dict()
+    data["hrv_sdnn"] = 10000.1
+    with pytest.raises(ValidationError, match="less_than_equal"):
+        PredictRequest(**data)
+
+
 @pytest.mark.parametrize(
     "bad_float",
     [float("nan"), float("inf"), float("-inf")],

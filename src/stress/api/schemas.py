@@ -41,16 +41,22 @@ class PredictRequest(BaseModel):
     hrv_sdnn: float | None = Field(
         ...,
         ge=0.0,
-        le=500.0,
+        le=10000.0,
         allow_inf_nan=False,
-        description="Standard deviation of inter-beat intervals in ms. None if <10 peaks.",
+        description=(
+            "Standard deviation of inter-beat intervals in ms. None if <10 peaks. "
+            "Values above ~300 ms are likely peak-detection artifacts."
+        ),
     )
     hrv_rmssd: float | None = Field(
         ...,
         ge=0.0,
-        le=500.0,
+        le=10000.0,
         allow_inf_nan=False,
-        description="Root mean square of successive IBI differences in ms. None if <10 peaks.",
+        description=(
+            "Root mean square of successive IBI differences in ms. None if <10 peaks. "
+            "Values above ~300 ms are likely peak-detection artifacts."
+        ),
     )
     hrv_pnn50: float | None = Field(
         ...,
