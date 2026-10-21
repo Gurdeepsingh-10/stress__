@@ -40,7 +40,7 @@ This project provides a reproducible benchmark on the publicly available WESAD d
 | Method B2 (Calibrated Threshold) | Completed | Evaluated across k in {0, 3, 5, 10} |
 | MLflow Experiment Logging | Completed | Parameters and aggregate fold metrics logged |
 | Benchmark Tables Generator | Completed | Script to recreate markdown tables from experimental CSVs |
-| FastAPI Serving Layer | Not started | Planned |
+| FastAPI Serving Layer | Completed | `src/stress/api/` (`model_loader.py`, `main.py`); `scripts/train_final_model.py` |
 | Docker Containerization | Not started | Planned |
 | Monitoring (Prometheus / Grafana) | Not started | Planned |
 | Load Testing (Locust) | Not started | Planned |
@@ -201,6 +201,8 @@ Peak settings are quoted directly from `src/stress/features/extract.py`:
 
 *Source: `docs/results/loso_baselines.csv`*
 
+> **Amusement detection note**: Amusement recall (LOSO, all features): logistic = 0.1603, random forest = 0.1923.
+
 ### 3. Pre-Registered Primary Comparison
 
 Condition: Logistic Regression, Feature Group `all`, Method A (k=10) vs Reference (k=0).
@@ -292,9 +294,9 @@ python -c "import mlflow; mlflow.set_tracking_uri('sqlite:///mlflow.db'); df=mlf
 ```
 
 ### 7. Calibration quality diagnostic (optional)
-Inspect early-vs-late baseline physiological drift:
+Inspect early-vs-late baseline physiological drift (committed output: `docs/results/calibration_quality_report.txt`):
 ```bash
-python -c "from stress.personalization.experiment import compute_calibration_diagnostics; import pandas as pd; d=pd.read_csv('data/processed/features_phase2.csv'); print('Ran calibration diagnostics')"
+python scripts/calibration_quality.py --features data/processed/features_phase2.csv --results data/processed/personalization_per_subject.csv
 ```
 
 ### 8. Regenerate markdown results tables
@@ -306,6 +308,87 @@ python scripts/make_results_tables.py --baselines docs/results/loso_baselines.cs
 ```bash
 python -m pytest tests/ -q -W default
 ```
+
+---
+
+## API demo
+
+### Train the final model
+
+Fit logistic regression on all 1 015 windows and save artifacts to `models/` (or a custom directory):
+
+```powershell
+.venv\Scripts\python.exe scripts\train_final_model.py
+# Optional flags:
+#   --out-dir  <path>   directory to write .joblib / .json  (default: models/)
+#   --csv      <path>   feature CSV                          (default: data/processed/features_phase2.csv)
+```
+
+Outputs: `final_logistic_all.joblib` and `final_logistic_all.json` in the target directory.
+
+### Run the API server
+
+```powershell
+# STRESS_MODEL_DIR is optional; defaults to models/ when unset.
+# $env:STRESS_MODEL_DIR = "path\to\model\dir"   # override if needed
+.venv\Scripts\python.exe -m uvicorn stress.api.main:create_app --factory --port 8000
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|:---|:---|:---|
+| `GET` | `/health` | Returns `{"status": "ok", "model_loaded": true}` |
+| `GET` | `/model-info` | Returns metadata: model name/version, features, training samples, git commit, environment |
+| `POST` | `/predict` | Accepts 17 features; returns stress probability and predicted label. Decision threshold: 0.5 (strictly $p > 0.5$ means stress) |
+
+### Example request and response
+
+**`POST /predict`** — JSON body with all 17 feature fields:
+
+```json
+{
+  "hrv_mean_hr":      75.0,
+  "hrv_hr_std":        5.2,
+  "hrv_sdnn":         45.0,
+  "hrv_rmssd":        38.0,
+  "hrv_pnn50":         0.15,
+  "hrv_num_beats":    74,
+  "eda_mean":          2.5,
+  "eda_std":           0.4,
+  "eda_min":           1.8,
+  "eda_max":           3.4,
+  "eda_slope":         0.002,
+  "eda_num_peaks":     3,
+  "temp_mean":        32.5,
+  "temp_std":          0.15,
+  "temp_slope":       -0.001,
+  "acc_magnitude_mean": 0.98,
+  "acc_magnitude_std":  0.04
+}
+```
+
+HRV interval features (`hrv_mean_hr`, `hrv_hr_std`, `hrv_sdnn`, `hrv_rmssd`, `hrv_pnn50`) may be `null` when fewer than 10 peaks are detected in a window.
+
+**Response shape** (values illustrative):
+
+```json
+{
+  "stress_probability": 0.312,
+  "predicted_label":    0,
+  "threshold":          0.5,
+  "model_version":      "1.0.0",
+  "disclaimer":         "Research demonstration only. Not a medical device. Not intended for clinical diagnosis, decision-making, or treatment."
+}
+```
+
+### Limits and caveats
+
+- **No authentication**: The server has no API key or auth layer. Do not expose it publicly.
+- **joblib security**: Joblib artifacts execute arbitrary code on load. Only load artifacts you built yourself from this repository.
+- **No held-out score**: The final model is trained on all 1 015 windows; it has no held-out evaluation score. Its evidential support is the LOSO result (macro-F1 0.8548 for logistic regression, all features).
+- **Research demo**: This is a wellness research tool, not a diagnostic medical device.
+- **HRV SDNN/RMSSD bounds**: The upper bound was widened from 500 ms to 10 000 ms because 47 of 1 015 training windows had RMSSD and/or SDNN above 500 ms, most likely due to peak-detection artifacts in wrist BVP.
 
 ---
 
@@ -326,8 +409,9 @@ python -m pytest tests/ -q -W default
 
 ## Roadmap
 
-- FastAPI REST endpoints for real-time window ingestion and prediction.
-- ONNX model export for low-latency scoring.
-- Dockerized deployment setup with docker-compose.
-- Prometheus metrics instrumentation and Grafana monitoring dashboard.
-- Load testing harness using Locust.
+- ~~FastAPI REST endpoints for real-time window ingestion and prediction.~~ **Done** — `src/stress/api/` (`schemas.py`, `model_loader.py`, `main.py`) and `scripts/train_final_model.py`.
+- Docker containerization with docker-compose. *(future)*
+- Prometheus metrics instrumentation and Grafana monitoring dashboard. *(future)*
+- Load testing harness using Locust. *(future)*
+- ONNX model export for low-latency scoring. *(future)*
+- Cloud or edge deployment. *(future)*
