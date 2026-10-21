@@ -1,0 +1,57 @@
+# Version control
+.git/
+.gitignore
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Development, tests, docs, scripts
+tests/
+docs/
+scripts/
+.github/
+
+# Data and model artifacts (mounted at runtime via volume)
+data/
+models/
+*.joblib
+*.pkl
+*.npz
+*.onnx
+
+# MLflow tracking artifacts
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
+
+# Caches and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Environment files
+.env
+.env.*
+
+# IDE and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
