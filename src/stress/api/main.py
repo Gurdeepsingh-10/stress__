@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import math
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+from stress.api.metrics import AppMetrics, init_metrics
 from stress.api.model_loader import LoadedModel, load_model, predict_stress_probability
 from stress.api.schemas import (
     HealthResponse,
@@ -47,7 +50,7 @@ def decide_label(p: float, threshold: float = THRESHOLD) -> Literal[0, 1]:
 
 
 def create_app(model_dir: Path | str | None = None) -> FastAPI:
-    """Create and configure FastAPI application with lifespan model loading.
+    """Create and configure FastAPI application with lifespan model loading and metrics.
 
     Args:
         model_dir: Directory containing model artifacts. If None, defaults to
@@ -56,11 +59,16 @@ def create_app(model_dir: Path | str | None = None) -> FastAPI:
     Returns:
         Configured FastAPI application instance.
     """
+    metrics = init_metrics()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.model = load_model(model_dir)
-        yield
+        app.state.metrics.model_loaded.set(1.0)
+        try:
+            yield
+        finally:
+            app.state.metrics.model_loaded.set(0.0)
 
     app = FastAPI(
         title="Stress Detection Research Demo",
@@ -68,6 +76,32 @@ def create_app(model_dir: Path | str | None = None) -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    app.state.metrics = metrics
+    app.state.metrics_registry = metrics.registry
+
+    @app.middleware("http")
+    async def metrics_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.url.path == "/metrics":
+            return await call_next(request)
+
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            route_path = route.path if route and hasattr(route, "path") else "unmatched"
+            if route_path != "/metrics":
+                app_metrics: AppMetrics = request.app.state.metrics
+                app_metrics.http_requests_total.labels(
+                    route=route_path,
+                    method=request.method,
+                    status=str(status_code),
+                ).inc()
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
@@ -106,15 +140,27 @@ def create_app(model_dir: Path | str | None = None) -> FastAPI:
 
     @app.post("/predict", response_model=PredictResponse)
     def predict(payload: PredictRequest, request: Request) -> PredictResponse:
+        start_time = time.perf_counter()
         loaded: LoadedModel = request.app.state.model
         p = predict_stress_probability(loaded, payload)
         label = decide_label(p, threshold=THRESHOLD)
+        duration = time.perf_counter() - start_time
+
+        app_metrics: AppMetrics = request.app.state.metrics
+        app_metrics.predict_latency_seconds.observe(duration)
+        app_metrics.predictions_total.labels(label=str(label)).inc()
+
         return PredictResponse(
             stress_probability=p,
             predicted_label=label,
             threshold=THRESHOLD,
             model_version=str(loaded.metadata["model_version"]),
         )
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics_endpoint(request: Request) -> Response:
+        data = generate_latest(request.app.state.metrics_registry)
+        return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
     return app
 
