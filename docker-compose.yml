@@ -1,0 +1,31 @@
+# Docker Compose for local development of the stress detection API with Prometheus scraping.
+# Requires: models/final_logistic_all.joblib and models/final_logistic_all.json to exist locally.
+
+services:
+
+  api:
+    build: .
+    # Use the same tagged image name whether built here or via `docker build -t stress-api:dev .`
+    image: stress-api:dev
+    ports:
+      # Bind to loopback only; not exposed to the network.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Model artifacts are never baked into the image; mounted read-only at runtime.
+      # Train them first with: python scripts/train_final_model.py
+      - ./models:/app/models:ro
+    # healthcheck is inherited from the Dockerfile HEALTHCHECK instruction;
+    # prometheus depends_on this service becoming healthy before it starts.
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    ports:
+      # Bind to loopback only; not exposed to the network.
+      - "127.0.0.1:9090:9090"
+    volumes:
+      # Mount scrape configuration read-only at the path the official Prometheus image expects.
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      api:
+        # Wait until the API container passes its healthcheck before Prometheus starts.
+        condition: service_healthy
