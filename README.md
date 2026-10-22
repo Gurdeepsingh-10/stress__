@@ -41,7 +41,7 @@ This project provides a reproducible benchmark on the publicly available WESAD d
 | MLflow Experiment Logging | Completed | Parameters and aggregate fold metrics logged |
 | Benchmark Tables Generator | Completed | Script to recreate markdown tables from experimental CSVs |
 | FastAPI Serving Layer | Completed | `src/stress/api/` (`model_loader.py`, `main.py`); `scripts/train_final_model.py` |
-| Docker Containerization | Not started | Planned |
+| Docker Containerization | Completed | Multi-stage `Dockerfile`, non-root UID 10001, runtime model bind mount |
 | Monitoring (Prometheus / Grafana) | Not started | Planned |
 | Load Testing (Locust) | Not started | Planned |
 | Model Export (ONNX) | Not started | Planned |
@@ -326,13 +326,39 @@ Fit logistic regression on all 1 015 windows and save artifacts to `models/` (or
 
 Outputs: `final_logistic_all.joblib` and `final_logistic_all.json` in the target directory.
 
-### Run the API server
+### Run the API server locally
 
 ```powershell
 # STRESS_MODEL_DIR is optional; defaults to models/ when unset.
 # $env:STRESS_MODEL_DIR = "path\to\model\dir"   # override if needed
 .venv\Scripts\python.exe -m uvicorn stress.api.main:create_app --factory --port 8000
 ```
+
+### Run with Docker
+
+Build:
+
+```powershell
+docker build -t stress-api:dev .
+```
+
+Run:
+
+```powershell
+docker run --rm -p 127.0.0.1:8000:8000 -v "${PWD}\models:/app/models:ro" stress-api:dev
+```
+
+- **Local access**: The API is available locally at `http://127.0.0.1:8000`.
+- **Decoupled model artifacts**: The trained model is mounted at runtime under `/app/models` and is never baked into the Docker image.
+- **Required artifacts**: The local `models` directory must contain `final_logistic_all.joblib` and `final_logistic_all.json`, produced by `scripts\train_final_model.py`.
+- **Read-only mount**: The model mount is read-only.
+- **Missing model behavior**: Without the model mount, the container fails at startup with a `Model artifact not found` error and exit code `3`. This behavior was tested.
+- **Non-root user**: The container runs as a non-root user with UID `10001`.
+- **Observed container behavior**:
+  - The container ran as non-root UID `10001`.
+  - Docker reported the container as `(healthy)`.
+  - The container returned the same prediction as the local server for one tested real CSV row: `0.257368751675513`, with label `0`.
+- **Image measurements**: Image size: approximately 746 MB disk usage / 169 MB content size, as measured with `docker images` on one Windows 11 + Docker Desktop (WSL2) machine. Note that these are measurements from one machine, not universal image-size guarantees.
 
 ### Endpoints
 
@@ -410,7 +436,7 @@ HRV interval features (`hrv_mean_hr`, `hrv_hr_std`, `hrv_sdnn`, `hrv_rmssd`, `hr
 ## Roadmap
 
 - ~~FastAPI REST endpoints for real-time window ingestion and prediction.~~ **Done** — `src/stress/api/` (`schemas.py`, `model_loader.py`, `main.py`) and `scripts/train_final_model.py`.
-- Docker containerization with docker-compose. *(future)*
+- ~~Docker containerization.~~ **Done** — Multi-stage `Dockerfile` with non-root UID 10001, healthcheck, and read-only runtime model mount; docker-compose setup remains future.
 - Prometheus metrics instrumentation and Grafana monitoring dashboard. *(future)*
 - Load testing harness using Locust. *(future)*
 - ONNX model export for low-latency scoring. *(future)*
