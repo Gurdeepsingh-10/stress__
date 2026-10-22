@@ -23,7 +23,8 @@ RUN pip install --no-cache-dir \
     joblib==1.6.0 \
     fastapi==0.143.0 \
     "uvicorn[standard]==0.54.0" \
-    pydantic==2.14.1
+    pydantic==2.14.1 \
+    prometheus-client==0.26.0
 
 # Install project package (stress) from source.
 # Justification: --no-deps prevents pulling in unpinned optional dependencies
