@@ -1,0 +1,18 @@
+# Prometheus scrape configuration for the stress detection API.
+# Prometheus will scrape the /metrics endpoint of the api service every 15 seconds.
+
+global:
+  # How frequently to scrape targets.
+  scrape_interval: 15s
+  # How frequently to evaluate alerting/recording rules (no rules defined here).
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "stress-api"
+    # The api service exposes Prometheus exposition format at /metrics (not the default /metrics
+    # path differs from Prometheus's own default of /metrics, but both happen to be /metrics here).
+    metrics_path: "/metrics"
+    static_configs:
+      # "api" resolves to the api container inside the Compose network.
+      # Port 8000 is the uvicorn port declared in the Dockerfile CMD.
+      - targets: ["api:8000"]
