@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from prometheus_client.parser import text_string_to_metric_families
 
@@ -165,3 +166,60 @@ def test_metrics_endpoint_scrapes_do_not_increment_request_counter(tmp_path: Pat
             {"route": "/metrics", "method": "GET", "status": "200"},
         )
         assert sample is None
+
+
+def test_unhandled_prediction_exception_counted_as_500(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unhandled exception in prediction is counted under 500 without prediction increment."""
+    _save_valid_artifact_bundle(tmp_path)
+    app = create_app(tmp_path)
+
+    def _failing_predict(*args: object, **kwargs: object) -> float:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("stress.api.main.predict_stress_probability", _failing_predict)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        res = client.post("/predict", json=_valid_request_dict())
+        assert res.status_code == 500
+
+        text = client.get("/metrics").text
+        req_count_500 = get_sample_value(
+            text,
+            "stress_http_requests_total",
+            {"route": "/predict", "method": "POST", "status": "500"},
+        )
+        assert req_count_500 == 1.0
+
+        # Assert no stress_predictions_total sample exists for label "0" or "1"
+        assert get_sample_value(text, "stress_predictions_total", {"label": "0"}) is None
+        assert get_sample_value(text, "stress_predictions_total", {"label": "1"}) is None
+
+        # Assert 200 series for /predict is absent
+        assert (
+            get_sample_value(
+                text,
+                "stress_http_requests_total",
+                {"route": "/predict", "method": "POST", "status": "200"},
+            )
+            is None
+        )
+
+
+def test_predict_latency_histogram_observed_once(tmp_path: Path) -> None:
+    """Single valid POST /predict records latency observation count 1.0 and sum > 0."""
+    _save_valid_artifact_bundle(tmp_path)
+    app = create_app(tmp_path)
+
+    with TestClient(app) as client:
+        res = client.post("/predict", json=_valid_request_dict())
+        assert res.status_code == 200
+
+        text = client.get("/metrics").text
+        count_val = get_sample_value(text, "stress_predict_latency_seconds_count")
+        assert count_val == 1.0
+
+        sum_val = get_sample_value(text, "stress_predict_latency_seconds_sum")
+        assert sum_val is not None
+        assert sum_val > 0.0
