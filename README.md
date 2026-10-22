@@ -42,7 +42,9 @@ This project provides a reproducible benchmark on the publicly available WESAD d
 | Benchmark Tables Generator | Completed | Script to recreate markdown tables from experimental CSVs |
 | FastAPI Serving Layer | Completed | `src/stress/api/` (`model_loader.py`, `main.py`); `scripts/train_final_model.py` |
 | Docker Containerization | Completed | Multi-stage `Dockerfile`, non-root UID 10001, runtime model bind mount |
-| Monitoring (Prometheus / Grafana) | Not started | Planned |
+| Docker Compose | Completed | `docker-compose.yml` with API + Prometheus services; model bind mount |
+| Prometheus Metrics | Completed | Per-app `CollectorRegistry`; 4 metrics; `/metrics` endpoint; `prom/prometheus:v3.15.1` |
+| Grafana Dashboard | Not started | Planned |
 | Load Testing (Locust) | Not started | Planned |
 | Model Export (ONNX) | Not started | Planned |
 
@@ -360,6 +362,49 @@ docker run --rm -p 127.0.0.1:8000:8000 -v "${PWD}\models:/app/models:ro" stress-
   - The container returned the same prediction as the local server for one tested real CSV row: `0.257368751675513`, with label `0`.
 - **Image measurements**: Image size: approximately 746 MB disk usage / 169 MB content size, as measured with `docker images` on one Windows 11 + Docker Desktop (WSL2) machine. Note that these are measurements from one machine, not universal image-size guarantees.
 
+### Run with Docker Compose
+
+Requires `models/` to be populated first (see [Train the final model](#train-the-final-model) above, or run `scripts\train_final_model.py`).
+
+Build and start both services (API + Prometheus):
+
+```powershell
+docker compose up --build
+```
+
+Stop and remove containers:
+
+```powershell
+docker compose down
+```
+
+- **API**: `http://127.0.0.1:8000`
+- **Prometheus UI**: `http://127.0.0.1:9090` — Prometheus scrapes the API every 15 s.
+- **Metrics endpoint**: `GET http://127.0.0.1:8000/metrics` returns Prometheus exposition format. Labels use route templates (e.g. `/predict`), never raw URLs or feature values.
+- **Prometheus image**: `prom/prometheus:v3.15.1`
+
+#### Exposed metrics
+
+| Metric | Type | Description |
+|:---|:---:|:---|
+| `stress_http_requests_total{route,method,status}` | Counter | Every request except `/metrics`; `route` is the matched path template or `unmatched` |
+| `stress_predict_latency_seconds` | Histogram | Duration of `/predict` requests only |
+| `stress_predictions_total{label}` | Counter | Successful `/predict` completions; `label` in `{"0","1"}` |
+| `stress_model_loaded` | Gauge | `1` after `load_model` succeeds in lifespan; `0` at creation |
+
+#### One local run observation
+
+In one local run (Windows 11, Docker Desktop WSL2):
+- Prometheus target `api:8000` showed state **UP**.
+- One `POST /predict` request returned HTTP 200; `stress_http_requests_total{route="/predict",method="POST",status="200"}` = 1.
+- `stress_predictions_total{label="0"}` = 1.
+
+No other request counts or metric values from this run are claimed.
+
+#### Troubleshooting
+
+- **Container without network after failed port bind**: In one observed case a failed port bind left a container without network; `docker compose down` then `docker compose up` fixed it.
+
 ### Endpoints
 
 | Method | Path | Description |
@@ -436,8 +481,10 @@ HRV interval features (`hrv_mean_hr`, `hrv_hr_std`, `hrv_sdnn`, `hrv_rmssd`, `hr
 ## Roadmap
 
 - ~~FastAPI REST endpoints for real-time window ingestion and prediction.~~ **Done** — `src/stress/api/` (`schemas.py`, `model_loader.py`, `main.py`) and `scripts/train_final_model.py`.
-- ~~Docker containerization.~~ **Done** — Multi-stage `Dockerfile` with non-root UID 10001, healthcheck, and read-only runtime model mount; docker-compose setup remains future.
-- Prometheus metrics instrumentation and Grafana monitoring dashboard. *(future)*
+- ~~Docker containerization.~~ **Done** — Multi-stage `Dockerfile` with non-root UID 10001, healthcheck, and read-only runtime model mount.
+- ~~Docker Compose orchestration.~~ **Done** — `docker-compose.yml` with API + Prometheus services; model bind mount; `depends_on: service_healthy`.
+- ~~Prometheus metrics instrumentation.~~ **Done** — Per-app `CollectorRegistry`; `stress_http_requests_total`, `stress_predict_latency_seconds`, `stress_predictions_total`, `stress_model_loaded`; `/metrics` endpoint; `prom/prometheus:v3.15.1` scrape config.
+- Grafana monitoring dashboard. *(future)*
 - Load testing harness using Locust. *(future)*
 - ONNX model export for low-latency scoring. *(future)*
 - Cloud or edge deployment. *(future)*
