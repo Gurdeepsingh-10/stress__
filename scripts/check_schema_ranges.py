@@ -11,23 +11,33 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 from pydantic import ValidationError
 
+from stress.api.payload_builder import (
+    _HRV_NULLABLE,
+    _INT_FIELDS,
+    FEATURE_COLS,
+    row_to_dict,
+)
 from stress.api.schemas import PredictRequest
+
+__all__ = [
+    "FEATURE_COLS",
+    "_HRV_NULLABLE",
+    "_INT_FIELDS",
+    "_row_to_dict",
+    "load",
+    "summarize",
+    "validate_rows",
+]
 
 # Default CSV path relative to repo root
 _DEFAULT_CSV = Path(__file__).parent.parent / "data" / "processed" / "features_phase2.csv"
 
-# HRV interval fields that accept None when peaks are insufficient
-_HRV_NULLABLE = frozenset({"hrv_mean_hr", "hrv_hr_std", "hrv_sdnn", "hrv_rmssd", "hrv_pnn50"})
-# Integer fields that must be cast from float64
-_INT_FIELDS = frozenset({"hrv_num_beats", "eda_num_peaks"})
-
-# Derive the 17 feature column names directly from the schema — never hand-typed
-FEATURE_COLS: list[str] = list(PredictRequest.model_fields.keys())
+# Backward-compatible alias for existing tests and scripts
+_row_to_dict = row_to_dict
 
 
 # ---------------------------------------------------------------------------
@@ -38,27 +48,6 @@ FEATURE_COLS: list[str] = list(PredictRequest.model_fields.keys())
 def load(csv_path: Path) -> pd.DataFrame:
     """Load the feature CSV and return the full DataFrame (all columns)."""
     return pd.read_csv(csv_path)
-
-
-def _row_to_dict(row: pd.Series) -> dict[str, Any]:
-    """Convert one CSV row to a dict suitable for PredictRequest validation.
-
-    Rules:
-    - HRV nullable fields: pandas NaN → Python None.
-    - Integer fields: cast to int (after NaN check; NaN on int fields is unexpected
-      but will surface as a validation error naturally).
-    - All other fields: pass through as-is.
-    """
-    d: dict[str, Any] = {}
-    for col in FEATURE_COLS:
-        val = row[col]
-        if col in _HRV_NULLABLE:
-            d[col] = None if pd.isna(val) else float(val)
-        elif col in _INT_FIELDS:
-            d[col] = int(val)
-        else:
-            d[col] = val
-    return d
 
 
 def validate_rows(
@@ -78,8 +67,8 @@ def validate_rows(
 
     for idx in range(len(df)):
         row = df.iloc[idx]
-        d = _row_to_dict(row)
         try:
+            d = _row_to_dict(row, row_index=idx)
             PredictRequest(**d)
         except ValidationError as exc:
             failing_indices.append(idx)
@@ -88,6 +77,12 @@ def validate_rows(
                 if locs:
                     field = str(locs[0])
                     field_failures.setdefault(field, []).append(idx)
+        except ValueError as exc:
+            failing_indices.append(idx)
+            for col in FEATURE_COLS:
+                if f"'{col}'" in str(exc):
+                    field_failures.setdefault(col, []).append(idx)
+                    break
 
     return failing_indices, field_failures
 

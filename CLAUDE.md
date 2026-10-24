@@ -48,3 +48,21 @@ All commands use the venv interpreter explicitly to avoid running against global
 ```
 
 **Convention:** Always use `.venv/Scripts/python.exe -m` for package commands.
+
+## Working protocol (added at handoff)
+- Never trust an assistant's summary or typed numbers; ask for raw command output and re-run key checks yourself.
+- Every key invariant needs a mutation check: break the code on purpose, show the test fail, restore from a backup in $env:TEMP, and show equal (Get-FileHash).Hash for both files.
+- Git belongs to the user: explicit `git add <paths>`, check the branch first, one branch per task, PRs into master with a merge commit after green CI, never push to master.
+- Assistants must not run installs, Docker, or git. Use `.venv\Scripts\python.exe -m ...` only.
+- API run command: `.venv\Scripts\python.exe -m uvicorn stress.api.main:create_app --factory`.
+- CI lints only src/, tests/, scripts/. loadtest/ is not linted by CI.
+- Claims: measured numbers with sources; exploratory vs pre-registered kept separate; research demo, not a medical device.
+
+## Working protocol (added at handoff)
+- Never trust an assistant's summary or typed numbers; ask for raw command output and re-run key checks yourself.
+- Every key invariant needs a mutation check: break the code on purpose, show the test fail, restore from a backup in $env:TEMP, and show equal (Get-FileHash).Hash for both files.
+- Git belongs to the user: explicit `git add <paths>`, check the branch first, one branch per task, PRs into master with a merge commit after green CI, never push to master.
+- Assistants must not run installs, Docker, or git. Use `.venv\Scripts\python.exe -m ...` only.
+- API run command: `.venv\Scripts\python.exe -m uvicorn stress.api.main:create_app --factory`.
+- CI lints only src/, tests/, scripts/. loadtest/ is not linted by CI.
+- Claims: measured numbers with sources; exploratory vs pre-registered kept separate; research demo, not a medical device.

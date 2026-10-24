@@ -40,6 +40,9 @@ dev = [
     "ruff>=0.1",
     "httpx>=0.25",
 ]
+loadtest = [
+    "locust>=2.20",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/stress"]
