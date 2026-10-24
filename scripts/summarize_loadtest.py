@@ -1,95 +1,133 @@
-"""Extract and format Locust load test performance summary for /predict.
+"""Extract and format Locust load test performance summary for /predict from JSON.
 
-Parses Locust *_stats.csv and extracts latency and throughput metrics
-for the /predict inference endpoint into a Markdown table.
+Parses Locust --json-file export, computes nearest-rank latency percentiles,
+active-window throughput, and reconciles request count with server metrics.
+
+Usage:
+    .venv\\Scripts\\python.exe -m scripts.summarize_loadtest --json <file> --users N \\
+        [--metrics-before F --metrics-after F] [--out F]
+
+Note:
+    Running the file path directly is not supported; invoke via -m scripts.summarize_loadtest.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
+from scripts.read_metrics import compute_metrics_delta, parse_metrics
 
-
-def read_stats_csv(csv_path: str | Path) -> pd.DataFrame:
-    """Read a Locust stats CSV file into a pandas DataFrame.
-
-    Args:
-        csv_path: Path to the *_stats.csv file.
-
-    Returns:
-        DataFrame containing Locust run statistics.
-
-    Raises:
-        FileNotFoundError: If the CSV file does not exist.
-    """
-    path = Path(csv_path)
-    if not path.is_file():
-        raise FileNotFoundError(f"Stats CSV file not found: {path}")
-    return pd.read_csv(path)
-
-
-REQUIRED_COLUMNS: tuple[str, ...] = (
-    "Name",
-    "Request Count",
-    "Failure Count",
-    "Requests/s",
-    "Average Response Time",
-    "Min Response Time",
-    "Max Response Time",
-    "50%",
-    "95%",
-    "99%",
+REQUIRED_KEYS: tuple[str, ...] = (
+    "num_requests",
+    "num_failures",
+    "total_response_time",
+    "min_response_time",
+    "max_response_time",
+    "response_times",
+    "start_time",
+    "last_request_timestamp",
 )
 
 
-def compute_summary(df: pd.DataFrame) -> dict[str, Any]:
-    """Extract performance metrics for the /predict endpoint from Locust stats.
+def _nearest_rank_percentile(sorted_buckets: list[tuple[float, int]], n: int, p: float) -> float:
+    """Calculate the p-th percentile using nearest-rank method on histogram buckets."""
+    target = math.ceil(n * p)
+    cumulative = 0
+    for val, count in sorted_buckets:
+        cumulative += count
+        if cumulative >= target:
+            return val
+    return sorted_buckets[-1][0]
+
+
+def compute_summary_from_json(data: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extract performance metrics for the POST /predict endpoint from Locust JSON data.
 
     Args:
-        df: DataFrame containing the raw Locust stats CSV records.
+        data: List of dictionaries parsed from Locust JSON export.
 
     Returns:
         Dictionary of extracted latency and throughput metrics.
 
     Raises:
-        ValueError: If required columns are missing from the DataFrame,
-            or if no row with Name == '/predict' is present.
+        ValueError: If the POST /predict entry or any required key is missing,
+            num_requests is zero, histogram count sum mismatches num_requests,
+            or last_request_timestamp <= start_time.
     """
-    missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns in stats CSV: {', '.join(missing)}")
+    if not isinstance(data, list):
+        raise ValueError("Root JSON structure must be a list")
 
-    predict_rows = df[df["Name"] == "/predict"]
-    if predict_rows.empty:
-        raise ValueError("No row with Name == '/predict' found in stats CSV")
+    predict_entry: dict[str, Any] | None = None
+    for entry in data:
+        if (
+            isinstance(entry, dict)
+            and entry.get("name") == "/predict"
+            and entry.get("method") == "POST"
+        ):
+            predict_entry = entry
+            break
 
-    row = predict_rows.iloc[0]
+    if predict_entry is None:
+        raise ValueError("No entry with name='/predict' and method='POST' found in JSON data")
 
-    request_count = int(row["Request Count"])
-    failure_count = int(row["Failure Count"])
-    requests_per_s = float(row["Requests/s"])
-    failures_per_s = float(row.get("Failures/s", 0.0))
+    missing_keys = [k for k in REQUIRED_KEYS if k not in predict_entry]
+    if missing_keys:
+        raise ValueError(f"Missing required key: '{missing_keys[0]}'")
 
-    avg_latency = float(row["Average Response Time"])
-    min_latency = float(row["Min Response Time"])
-    max_latency = float(row["Max Response Time"])
-    median_latency = float(row["50%"])
-    p95_latency = float(row["95%"])
-    p99_latency = float(row["99%"])
+    num_requests = int(predict_entry["num_requests"])
+    if num_requests <= 0:
+        raise ValueError("num_requests must be greater than 0")
 
-    failure_rate = (failure_count / request_count * 100.0) if request_count > 0 else 0.0
+    response_times: Any = predict_entry["response_times"]
+    if not isinstance(response_times, dict):
+        raise ValueError("response_times must be a dictionary")
+
+    total_histogram_count = sum(int(c) for c in response_times.values())
+    if total_histogram_count != num_requests:
+        raise ValueError(
+            f"Sum of response_times counts ({total_histogram_count}) "
+            f"does not match num_requests ({num_requests})"
+        )
+
+    start_time = float(predict_entry["start_time"])
+    last_request_timestamp = float(predict_entry["last_request_timestamp"])
+    if last_request_timestamp <= start_time:
+        raise ValueError(
+            f"last_request_timestamp ({last_request_timestamp}) "
+            f"must be greater than start_time ({start_time})"
+        )
+
+    failure_count = int(predict_entry["num_failures"])
+    failure_rate_pct = (failure_count / num_requests * 100.0) if num_requests > 0 else 0.0
+
+    total_response_time = float(predict_entry["total_response_time"])
+    avg_latency = total_response_time / num_requests
+    min_latency = float(predict_entry["min_response_time"])
+    max_latency = float(predict_entry["max_response_time"])
+
+    duration = last_request_timestamp - start_time
+    throughput = num_requests / duration
+
+    sorted_buckets: list[tuple[float, int]] = sorted(
+        ((float(k), int(v)) for k, v in response_times.items()),
+        key=lambda x: x[0],
+    )
+
+    median_latency = _nearest_rank_percentile(sorted_buckets, num_requests, 0.50)
+    p95_latency = _nearest_rank_percentile(sorted_buckets, num_requests, 0.95)
+    p99_latency = _nearest_rank_percentile(sorted_buckets, num_requests, 0.99)
 
     return {
         "name": "/predict",
-        "request_count": request_count,
+        "request_count": num_requests,
         "failure_count": failure_count,
-        "failure_rate_pct": failure_rate,
-        "requests_per_s": requests_per_s,
-        "failures_per_s": failures_per_s,
+        "failure_rate_pct": failure_rate_pct,
+        "requests_per_s": throughput,
         "avg_response_time_ms": avg_latency,
         "min_response_time_ms": min_latency,
         "max_response_time_ms": max_latency,
@@ -99,11 +137,37 @@ def compute_summary(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def format_markdown(summary: dict[str, Any]) -> str:
+def reconcile(locust_count: int, server_delta: int, users: int) -> None:
+    """Validate that server request delta accounts for all Locust requests within user drift.
+
+    Args:
+        locust_count: Total requests recorded by Locust.
+        server_delta: Total requests recorded on server metrics.
+        users: Number of virtual users.
+
+    Raises:
+        ValueError: If server_delta - locust_count is not in [0, users].
+    """
+    diff = server_delta - locust_count
+    if not (0 <= diff <= users):
+        raise ValueError(
+            f"Reconciliation failed: server_delta ({server_delta}) - locust_count ({locust_count}) "
+            f"= {diff}, which is outside expected range [0, {users}] for users={users}"
+        )
+
+
+FOOTNOTE: str = (
+    "Percentiles: nearest-rank on Locust's rounded-bucket histogram; "
+    "throughput: requests / active window"
+)
+
+
+def format_markdown(summary: dict[str, Any], server_delta: int | None = None) -> str:
     """Format extracted metrics as a readable Markdown summary table.
 
     Args:
-        summary: Dictionary produced by compute_summary().
+        summary: Dictionary produced by compute_summary_from_json().
+        server_delta: Optional server request count delta from Prometheus.
 
     Returns:
         Markdown string summarizing the load test performance.
@@ -124,13 +188,49 @@ def format_markdown(summary: dict[str, Any]) -> str:
         f"| Min Latency | {summary['min_response_time_ms']:.2f} ms |",
         f"| Max Latency | {summary['max_response_time_ms']:.2f} ms |",
     ]
+    if server_delta is not None:
+        lines.append(f"| Server count delta | {server_delta:,} |")
+        lines.append("| Reconcile | OK |")
+
+    lines.extend(
+        [
+            "",
+            FOOTNOTE,
+        ]
+    )
     return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entrypoint for summarizing a Locust stats CSV file."""
-    parser = argparse.ArgumentParser(description="Summarize Locust load test results for /predict.")
-    parser.add_argument("--csv", type=str, required=True, help="Path to Locust *_stats.csv")
+    """CLI entrypoint for summarizing a Locust JSON export file."""
+    parser = argparse.ArgumentParser(
+        description="Summarize Locust load test results for /predict from JSON."
+    )
+    parser.add_argument(
+        "--json",
+        type=str,
+        required=True,
+        dest="json_path",
+        help="Path to Locust JSON export file",
+    )
+    parser.add_argument(
+        "--users",
+        type=int,
+        required=True,
+        help="Number of simulated concurrent users",
+    )
+    parser.add_argument(
+        "--metrics-before",
+        type=str,
+        default=None,
+        help="Path to Prometheus metrics snapshot taken before the run",
+    )
+    parser.add_argument(
+        "--metrics-after",
+        type=str,
+        default=None,
+        help="Path to Prometheus metrics snapshot taken after the run",
+    )
     parser.add_argument(
         "--out",
         type=str,
@@ -140,13 +240,52 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    try:
-        df = read_stats_csv(args.csv)
-        summary = compute_summary(df)
-        markdown = format_markdown(summary)
-    except Exception as exc:
-        print(f"Error summarizing load test stats: {exc}", file=sys.stderr)
+    if bool(args.metrics_before) != bool(args.metrics_after):
+        print(
+            "Error: --metrics-before and --metrics-after must be specified together.",
+            file=sys.stderr,
+        )
         return 1
+
+    json_path = Path(args.json_path)
+    if not json_path.is_file():
+        print(f"Error: JSON file not found: {json_path}", file=sys.stderr)
+        return 1
+
+    try:
+        with json_path.open(encoding="utf-8") as f:
+            data = json.load(f)
+        summary = compute_summary_from_json(data)
+    except Exception as exc:
+        print(f"Error summarizing load test JSON: {exc}", file=sys.stderr)
+        return 1
+
+    server_delta: int | None = None
+    if args.metrics_before and args.metrics_after:
+        before_path = Path(args.metrics_before)
+        after_path = Path(args.metrics_after)
+        if not before_path.is_file():
+            print(f"Error: File not found: {before_path}", file=sys.stderr)
+            return 1
+        if not after_path.is_file():
+            print(f"Error: File not found: {after_path}", file=sys.stderr)
+            return 1
+
+        try:
+            before_metrics = parse_metrics(before_path.read_text(encoding="utf-8"))
+            after_metrics = parse_metrics(after_path.read_text(encoding="utf-8"))
+            delta = compute_metrics_delta(before_metrics, after_metrics)
+            metric_key = "stress_predict_latency_seconds_count"
+            if metric_key not in delta:
+                raise ValueError(f"Missing required metric in delta: '{metric_key}'")
+            server_delta_val = delta[metric_key]
+            server_delta = int(round(server_delta_val))
+            reconcile(summary["request_count"], server_delta, args.users)
+        except ValueError as exc:
+            print(f"Error during reconciliation: {exc}", file=sys.stderr)
+            return 1
+
+    markdown = format_markdown(summary, server_delta=server_delta)
 
     if args.out:
         out_path = Path(args.out)
