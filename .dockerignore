@@ -12,6 +12,7 @@ ENV/
 tests/
 docs/
 scripts/
+loadtest/
 .github/
 
 # Data and model artifacts (mounted at runtime via volume)
