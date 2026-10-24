@@ -32,6 +32,20 @@ def read_stats_csv(csv_path: str | Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
+REQUIRED_COLUMNS: tuple[str, ...] = (
+    "Name",
+    "Request Count",
+    "Failure Count",
+    "Requests/s",
+    "Average Response Time",
+    "Min Response Time",
+    "Max Response Time",
+    "50%",
+    "95%",
+    "99%",
+)
+
+
 def compute_summary(df: pd.DataFrame) -> dict[str, Any]:
     """Extract performance metrics for the /predict endpoint from Locust stats.
 
@@ -42,8 +56,13 @@ def compute_summary(df: pd.DataFrame) -> dict[str, Any]:
         Dictionary of extracted latency and throughput metrics.
 
     Raises:
-        ValueError: If no row with Name == '/predict' is present in the DataFrame.
+        ValueError: If required columns are missing from the DataFrame,
+            or if no row with Name == '/predict' is present.
     """
+    missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns in stats CSV: {', '.join(missing)}")
+
     predict_rows = df[df["Name"] == "/predict"]
     if predict_rows.empty:
         raise ValueError("No row with Name == '/predict' found in stats CSV")
@@ -58,11 +77,9 @@ def compute_summary(df: pd.DataFrame) -> dict[str, Any]:
     avg_latency = float(row["Average Response Time"])
     min_latency = float(row["Min Response Time"])
     max_latency = float(row["Max Response Time"])
-
-    # Locust stats CSV may use 'Median Response Time' or percentiles ('50%')
-    median_latency = float(row.get("Median Response Time", row.get("50%", 0.0)))
-    p95_latency = float(row.get("95%", 0.0))
-    p99_latency = float(row.get("99%", 0.0))
+    median_latency = float(row["50%"])
+    p95_latency = float(row["95%"])
+    p99_latency = float(row["99%"])
 
     failure_rate = (failure_count / request_count * 100.0) if request_count > 0 else 0.0
 

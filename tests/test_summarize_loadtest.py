@@ -100,11 +100,35 @@ def test_compute_summary_missing_predict_row_raises_error() -> None:
                 "Average Response Time": 1.2,
                 "Min Response Time": 0.5,
                 "Max Response Time": 2.0,
+                "50%": 1.0,
+                "95%": 1.5,
+                "99%": 1.8,
             }
         ]
     )
     with pytest.raises(ValueError, match="No row with Name == '/predict' found in stats CSV"):
         compute_summary(df)
+
+
+def test_compute_summary_missing_50_percent_column_raises_error() -> None:
+    df = _make_sample_stats_df().drop(columns=["50%"])
+    with pytest.raises(ValueError, match="50%") as exc_info:
+        compute_summary(df)
+    assert "50%" in str(exc_info.value)
+
+
+def test_compute_summary_missing_95_percent_column_raises_error() -> None:
+    df = _make_sample_stats_df().drop(columns=["95%"])
+    with pytest.raises(ValueError, match="95%") as exc_info:
+        compute_summary(df)
+    assert "95%" in str(exc_info.value)
+
+
+def test_compute_summary_missing_99_percent_column_raises_error() -> None:
+    df = _make_sample_stats_df().drop(columns=["99%"])
+    with pytest.raises(ValueError, match="99%") as exc_info:
+        compute_summary(df)
+    assert "99%" in str(exc_info.value)
 
 
 def test_format_markdown() -> None:
