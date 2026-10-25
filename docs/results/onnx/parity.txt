@@ -1,0 +1,6 @@
+Evaluated rows: 1015
+Rows with at least one null HRV field: 0
+Max absolute diff: 7.48609972e-07
+Label disagreements (p > 0.5): 0
+Rows within 1e-4 of threshold: 0
+Parity OK: True

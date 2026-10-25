@@ -427,6 +427,20 @@ Measured on one Windows 11 laptop with Docker Desktop (WSL2); the Locust load ge
 
 Client-observed latency rose roughly in proportion to the number of users while throughput stayed within a narrow band, as expected for a closed-loop test with zero think time. Throughput also declined from the first to the third repeat in every configuration, so differences in throughput between user counts are not claimed. 'Server mean' is the duration of the /predict handler body only; it excludes request validation, serialization, middleware and any queueing. The load generator (single-process Locust HttpUser) and the API share one laptop's CPU, and whether the limit is the API or the load generator was not isolated. These are single-machine numbers (Windows 11, Docker Desktop on WSL2, one uvicorn worker) and not a production-throughput claim.
 
+### ONNX export and function-level latency
+
+The served logistic pipeline (imputer, scaler, classifier) can be exported to ONNX (`python -m scripts.export_onnx`, needs the `[ml]` extra) and run with ONNX Runtime without scikit-learn, joblib or pandas. The export is checked against the scikit-learn pipeline on all 1015 feature rows (`docs/results/onnx/parity.txt`): maximum absolute probability difference 7.5e-07, 0 label disagreements at the strict `p > 0.5` threshold, and no row within 1e-4 of the threshold. None of those rows has a null HRV field, so the null-handling path is covered by synthetic tests only.
+
+Function-level benchmark (PredictRequest to probability, one thread, no HTTP; 2000 timed calls x 5 repeats per run, order rotated, two runs; raw output in `docs/results/onnx/`):
+
+| Path | Median per call (run 1 / run 2) |
+| :--- | ---: |
+| scikit-learn, one-row DataFrame (what the API serves today) | 1605.5 us / 1603.0 us |
+| scikit-learn, numpy row | 517.7 us / 512.3 us |
+| ONNX Runtime | 17.7 us / 17.4 us |
+
+That is 90.7x and 92.1x against the DataFrame path and 29.3x and 29.4x against the numpy path. Most of the gap is per-call pandas and scikit-learn overhead on a single row, not the model arithmetic (17 features, logistic regression). These numbers cover the model call only, on one Windows machine; the effect on API request latency is not measured here.
+
 ### Endpoints
 
 | Method | Path | Description |
@@ -508,5 +522,5 @@ HRV interval features (`hrv_mean_hr`, `hrv_hr_std`, `hrv_sdnn`, `hrv_rmssd`, `hr
 - ~~Prometheus metrics instrumentation.~~ **Done** — Per-app `CollectorRegistry`; `stress_http_requests_total`, `stress_predict_latency_seconds`, `stress_predictions_total`, `stress_model_loaded`; `/metrics` endpoint; `prom/prometheus:v3.15.1` scrape config.
 - Grafana monitoring dashboard. *(future)*
 - ~~Load testing harness using Locust.~~ **Done** — `loadtest/locustfile.py`, `scripts/summarize_loadtest.py`, `scripts/aggregate_loadtest.py`, results in `docs/results/loadtest/`.
-- ONNX model export for low-latency scoring. *(future)*
+- ~~ONNX model export for low-latency scoring.~~ **Done** — `scripts/export_onnx.py`, `src/stress/api/onnx_backend.py`; parity checked on all 1015 rows; function-level benchmark in `docs/results/onnx/`.
 - Cloud or edge deployment. *(future)*
