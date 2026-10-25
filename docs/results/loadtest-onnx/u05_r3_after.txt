@@ -1,0 +1,40 @@
+# HELP stress_http_requests_total Total number of HTTP requests processed.
+# TYPE stress_http_requests_total counter
+stress_http_requests_total{method="GET",route="/health",status="200"} 21.0
+stress_http_requests_total{method="GET",route="/model-info",status="200"} 1.0
+stress_http_requests_total{method="POST",route="/predict",status="200"} 227041.0
+# HELP stress_http_requests_created Total number of HTTP requests processed.
+# TYPE stress_http_requests_created gauge
+stress_http_requests_created{method="GET",route="/health",status="200"} 1.792958805601868e+09
+stress_http_requests_created{method="GET",route="/model-info",status="200"} 1.7929588069691586e+09
+stress_http_requests_created{method="POST",route="/predict",status="200"} 1.792958810052162e+09
+# HELP stress_predict_latency_seconds Latency of /predict endpoint inference in seconds.
+# TYPE stress_predict_latency_seconds histogram
+stress_predict_latency_seconds_bucket{le="0.0005"} 115199.0
+stress_predict_latency_seconds_bucket{le="0.001"} 167257.0
+stress_predict_latency_seconds_bucket{le="0.0025"} 211367.0
+stress_predict_latency_seconds_bucket{le="0.005"} 223372.0
+stress_predict_latency_seconds_bucket{le="0.01"} 226675.0
+stress_predict_latency_seconds_bucket{le="0.025"} 226977.0
+stress_predict_latency_seconds_bucket{le="0.05"} 227036.0
+stress_predict_latency_seconds_bucket{le="0.1"} 227041.0
+stress_predict_latency_seconds_bucket{le="0.25"} 227041.0
+stress_predict_latency_seconds_bucket{le="0.5"} 227041.0
+stress_predict_latency_seconds_bucket{le="1.0"} 227041.0
+stress_predict_latency_seconds_bucket{le="+Inf"} 227041.0
+stress_predict_latency_seconds_count 227041.0
+stress_predict_latency_seconds_sum 197.69274460503948
+# HELP stress_predict_latency_seconds_created Latency of /predict endpoint inference in seconds.
+# TYPE stress_predict_latency_seconds_created gauge
+stress_predict_latency_seconds_created 1.7929588019853256e+09
+# HELP stress_predictions_total Total number of stress predictions produced by predicted label.
+# TYPE stress_predictions_total counter
+stress_predictions_total{label="0"} 161240.0
+stress_predictions_total{label="1"} 65801.0
+# HELP stress_predictions_created Total number of stress predictions produced by predicted label.
+# TYPE stress_predictions_created gauge
+stress_predictions_created{label="0"} 1.7929588100495083e+09
+stress_predictions_created{label="1"} 1.792958810131358e+09
+# HELP stress_model_loaded Indicates whether model artifact is loaded (1) or not (0).
+# TYPE stress_model_loaded gauge
+stress_model_loaded 1.0

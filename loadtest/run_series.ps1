@@ -2,8 +2,12 @@
 # Interleaved warm-up (15 s) and measured run (70 s) across 5, 20, and 50 users for 3 repeats.
 # For each run, reconciles Locust request counts against Prometheus server metrics.
 # Before running: docker compose restart api, wait until docker compose ps shows healthy, keep the machine idle and plugged in (any other CPU load changes the results).
+# Parameter -Out: output directory path (defaults to docs\results\loadtest).
 
-$out = "docs\results\loadtest"
+param([string]$Out = "docs\results\loadtest")
+
+New-Item -ItemType Directory -Force -Path $Out | Out-Null
+
 $py = ".venv\Scripts\python.exe"
 $base = "http://127.0.0.1:8000"
 
