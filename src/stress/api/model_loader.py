@@ -12,10 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
-import pandas as pd
-import sklearn
 
 from stress.api.schemas import PredictRequest
 
@@ -46,6 +43,27 @@ def get_default_model_dir() -> Path:
     return Path(os.environ.get("STRESS_MODEL_DIR", "models"))
 
 
+def validate_features(metadata: dict[str, Any]) -> None:
+    """Validate that metadata feature list matches PredictRequest schema fields.
+
+    Args:
+        metadata: Metadata dictionary, must contain a 'features' list.
+
+    Raises:
+        ModelLoadError: If features are missing, wrong length, or don't match the schema.
+    """
+    schema_fields = set(PredictRequest.model_fields.keys())
+    meta_features = metadata.get("features")
+    if (
+        not isinstance(meta_features, list)
+        or len(meta_features) != len(PredictRequest.model_fields)
+        or set(meta_features) != schema_fields
+    ):
+        raise ModelLoadError(
+            f"Model metadata features do not match PredictRequest schema fields: {meta_features}"
+        )
+
+
 def load_model(model_dir: Path | str | None = None) -> LoadedModel:
     """Load model artifact and metadata from directory, validating compatibility.
 
@@ -61,6 +79,9 @@ def load_model(model_dir: Path | str | None = None) -> LoadedModel:
             library versions mismatch (scikit-learn or numpy major.minor),
             or pipeline classes_ != [0, 1].
     """
+    import joblib
+    import sklearn
+
     base_dir = Path(model_dir) if model_dir is not None else get_default_model_dir()
     joblib_path = base_dir / MODEL_FILENAME
     json_path = base_dir / METADATA_FILENAME
@@ -77,16 +98,7 @@ def load_model(model_dir: Path | str | None = None) -> LoadedModel:
         raise ModelLoadError(f"Failed to parse metadata JSON {json_path}: {exc}") from exc
 
     # Feature list validation (sets must match schema PredictRequest fields, length must match 17)
-    schema_fields = set(PredictRequest.model_fields.keys())
-    meta_features = metadata.get("features")
-    if (
-        not isinstance(meta_features, list)
-        or len(meta_features) != len(PredictRequest.model_fields)
-        or set(meta_features) != schema_fields
-    ):
-        raise ModelLoadError(
-            f"Model metadata features do not match PredictRequest schema fields: {meta_features}"
-        )
+    validate_features(metadata)
 
     # Library version compatibility check (major.minor must match)
     env_info = metadata.get("environment", {})
@@ -147,6 +159,8 @@ def predict_stress_probability(loaded: LoadedModel, request: PredictRequest) -> 
     Returns:
         Predicted probability of stress (class 1) as a float in [0.0, 1.0].
     """
+    import pandas as pd
+
     features: list[str] = loaded.metadata["features"]
     row: dict[str, Any] = {}
     for feat in features:

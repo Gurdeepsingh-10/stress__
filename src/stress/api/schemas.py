@@ -191,6 +191,7 @@ class ModelInfoResponse(BaseModel):
     n_features: int
     training_samples: int
     environment: dict[str, str]
+    backend: Literal["sklearn", "onnx"] = "sklearn"
     disclaimer: str = Field(default=RESEARCH_DISCLAIMER)
 
 
