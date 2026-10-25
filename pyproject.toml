@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-    "torch>=2.0",
+    "skl2onnx>=1.16",
     "onnx>=1.14",
     "onnxruntime>=1.16",
 ]
