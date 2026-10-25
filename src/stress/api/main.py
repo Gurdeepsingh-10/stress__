@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -16,7 +17,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from stress.api.metrics import AppMetrics, init_metrics
-from stress.api.model_loader import LoadedModel, load_model, predict_stress_probability
+from stress.api.model_loader import load_model, predict_stress_probability
 from stress.api.schemas import (
     HealthResponse,
     ModelInfoResponse,
@@ -35,6 +36,8 @@ APP_DESCRIPTION: str = (
     "or clinical decision support."
 )
 
+_ALLOWED_BACKENDS: frozenset[str] = frozenset({"sklearn", "onnx"})
+
 
 def decide_label(p: float, threshold: float = THRESHOLD) -> Literal[0, 1]:
     """Classify stress probability into binary label using strict inequality (>).
@@ -49,21 +52,51 @@ def decide_label(p: float, threshold: float = THRESHOLD) -> Literal[0, 1]:
     return 1 if p > threshold else 0
 
 
-def create_app(model_dir: Path | str | None = None) -> FastAPI:
+def create_app(
+    model_dir: Path | str | None = None,
+    backend: str | None = None,
+) -> FastAPI:
     """Create and configure FastAPI application with lifespan model loading and metrics.
 
     Args:
         model_dir: Directory containing model artifacts. If None, defaults to
             STRESS_MODEL_DIR environment variable or 'models'.
+        backend: Inference backend to use: 'sklearn' or 'onnx'. If None, resolved
+            from STRESS_BACKEND environment variable, then defaults to 'sklearn'.
 
     Returns:
         Configured FastAPI application instance.
+
+    Raises:
+        ValueError: If backend is not one of the allowed values.
     """
+    # Resolve backend: argument > env > default
+    resolved_backend: str = (
+        backend if backend is not None else os.environ.get("STRESS_BACKEND", "sklearn")
+    )
+    if resolved_backend not in _ALLOWED_BACKENDS:
+        raise ValueError(
+            f"Invalid backend {resolved_backend!r}. Allowed values: {sorted(_ALLOWED_BACKENDS)}"
+        )
+
+    if resolved_backend == "onnx":
+        from stress.api.onnx_backend import onnx_stress_probability
+
+        onnx_predict = onnx_stress_probability
+    else:
+        onnx_predict = None
+
     metrics = init_metrics()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.model = load_model(model_dir)
+        if resolved_backend == "onnx":
+            from stress.api.onnx_loader import load_onnx_model
+
+            app.state.model = load_onnx_model(model_dir)
+        else:
+            app.state.model = load_model(model_dir)
+        app.state.backend = resolved_backend
         app.state.metrics.model_loaded.set(1.0)
         try:
             yield
@@ -123,7 +156,7 @@ def create_app(model_dir: Path | str | None = None) -> FastAPI:
 
     @app.get("/model-info", response_model=ModelInfoResponse)
     def model_info(request: Request) -> ModelInfoResponse:
-        loaded: LoadedModel = request.app.state.model
+        loaded = request.app.state.model
         meta = loaded.metadata
         return ModelInfoResponse(
             model_name=str(meta["model_name"]),
@@ -136,13 +169,17 @@ def create_app(model_dir: Path | str | None = None) -> FastAPI:
             n_features=int(meta["n_features"]),
             training_samples=int(meta["training_samples"]),
             environment={k: str(v) for k, v in meta.get("environment", {}).items()},
+            backend=request.app.state.backend,
         )
 
     @app.post("/predict", response_model=PredictResponse)
     def predict(payload: PredictRequest, request: Request) -> PredictResponse:
         start_time = time.perf_counter()
-        loaded: LoadedModel = request.app.state.model
-        p = predict_stress_probability(loaded, payload)
+        loaded = request.app.state.model
+        if onnx_predict is not None:
+            p = onnx_predict(loaded.session, payload, loaded.metadata["features"])
+        else:
+            p = predict_stress_probability(loaded, payload)
         label = decide_label(p, threshold=THRESHOLD)
         duration = time.perf_counter() - start_time
 
