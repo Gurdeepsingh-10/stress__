@@ -15,6 +15,7 @@ from scripts.summarize_loadtest import (
     REQUIRED_KEYS,
     compute_summary_from_json,
     format_markdown,
+    load_server_delta,
     main,
     reconcile,
 )
@@ -287,3 +288,75 @@ def test_cli_module_execution_help() -> None:
     )
     assert res.returncode == 0
     assert "--json" in res.stdout
+
+
+# ---------------------------------------------------------------------------
+# Direct tests for load_server_delta
+# ---------------------------------------------------------------------------
+
+
+def test_load_server_delta_normal_return_values(tmp_path: Path) -> None:
+    before = tmp_path / "before.txt"
+    after = tmp_path / "after.txt"
+    before.write_text(
+        "stress_predict_latency_seconds_count 10.0\nstress_predict_latency_seconds_sum 2.0\n",
+        encoding="utf-8",
+    )
+    after.write_text(
+        "stress_predict_latency_seconds_count 112.0\nstress_predict_latency_seconds_sum 22.4\n",
+        encoding="utf-8",
+    )
+    count_delta, sum_delta = load_server_delta(before, after)
+    assert count_delta == 102
+    assert isinstance(count_delta, int)
+    assert pytest.approx(sum_delta, rel=1e-5) == 20.4
+
+
+def test_load_server_delta_missing_count_key_raises_naming_it(tmp_path: Path) -> None:
+    before = tmp_path / "before.txt"
+    after = tmp_path / "after.txt"
+    before.write_text("stress_predict_latency_seconds_sum 2.0\n", encoding="utf-8")
+    after.write_text("stress_predict_latency_seconds_sum 22.4\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="stress_predict_latency_seconds_count"):
+        load_server_delta(before, after)
+
+
+def test_load_server_delta_missing_sum_key_require_sum_true_raises_naming_it(
+    tmp_path: Path,
+) -> None:
+    before = tmp_path / "before.txt"
+    after = tmp_path / "after.txt"
+    before.write_text("stress_predict_latency_seconds_count 10.0\n", encoding="utf-8")
+    after.write_text("stress_predict_latency_seconds_count 112.0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="stress_predict_latency_seconds_sum"):
+        load_server_delta(before, after, require_sum=True)
+
+
+def test_load_server_delta_missing_sum_key_require_sum_false_returns_zero(
+    tmp_path: Path,
+) -> None:
+    before = tmp_path / "before.txt"
+    after = tmp_path / "after.txt"
+    before.write_text("stress_predict_latency_seconds_count 10.0\n", encoding="utf-8")
+    after.write_text("stress_predict_latency_seconds_count 112.0\n", encoding="utf-8")
+    count_delta, sum_delta = load_server_delta(before, after, require_sum=False)
+    assert count_delta == 102
+    assert isinstance(count_delta, int)
+    assert sum_delta == 0.0
+
+
+def test_load_server_delta_count_delta_rounded_to_int(tmp_path: Path) -> None:
+    # 111.6 - 10.0 = 101.6 -> rounded to int gives 102
+    before = tmp_path / "before.txt"
+    after = tmp_path / "after.txt"
+    before.write_text(
+        "stress_predict_latency_seconds_count 10.0\nstress_predict_latency_seconds_sum 2.0\n",
+        encoding="utf-8",
+    )
+    after.write_text(
+        "stress_predict_latency_seconds_count 111.6\nstress_predict_latency_seconds_sum 2.0\n",
+        encoding="utf-8",
+    )
+    count_delta, _ = load_server_delta(before, after)
+    assert count_delta == 102
+    assert isinstance(count_delta, int)

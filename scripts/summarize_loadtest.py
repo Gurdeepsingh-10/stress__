@@ -156,6 +156,45 @@ def reconcile(locust_count: int, server_delta: int, users: int) -> None:
         )
 
 
+def load_server_delta(
+    before_path: Path, after_path: Path, require_sum: bool = True
+) -> tuple[int, float]:
+    """Load Prometheus snapshots and return the request-count and latency-sum deltas.
+
+    Args:
+        before_path: Path to metrics snapshot taken before the run.
+        after_path: Path to metrics snapshot taken after the run.
+        require_sum: Whether to require stress_predict_latency_seconds_sum metric.
+
+    Returns:
+        (count_delta, sum_delta_seconds) where count_delta is the integer number of
+        new requests observed on the server and sum_delta_seconds is the total latency
+        added in seconds (stress_predict_latency_seconds_sum delta).
+
+    Raises:
+        ValueError: Naming the missing metric key if either
+            stress_predict_latency_seconds_count or (if require_sum)
+            stress_predict_latency_seconds_sum is absent from the computed delta.
+    """
+    before_metrics = parse_metrics(before_path.read_text(encoding="utf-8"))
+    after_metrics = parse_metrics(after_path.read_text(encoding="utf-8"))
+    delta = compute_metrics_delta(before_metrics, after_metrics)
+
+    count_key = "stress_predict_latency_seconds_count"
+    if count_key not in delta:
+        raise ValueError(f"Missing required metric in delta: '{count_key}'")
+
+    sum_key = "stress_predict_latency_seconds_sum"
+    if sum_key not in delta:
+        if require_sum:
+            raise ValueError(f"Missing required metric in delta: '{sum_key}'")
+        sum_delta = 0.0
+    else:
+        sum_delta = delta[sum_key]
+
+    return int(round(delta[count_key])), sum_delta
+
+
 FOOTNOTE: str = (
     "Percentiles: nearest-rank on Locust's rounded-bucket histogram; "
     "throughput: requests / active window"
@@ -272,14 +311,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         try:
-            before_metrics = parse_metrics(before_path.read_text(encoding="utf-8"))
-            after_metrics = parse_metrics(after_path.read_text(encoding="utf-8"))
-            delta = compute_metrics_delta(before_metrics, after_metrics)
-            metric_key = "stress_predict_latency_seconds_count"
-            if metric_key not in delta:
-                raise ValueError(f"Missing required metric in delta: '{metric_key}'")
-            server_delta_val = delta[metric_key]
-            server_delta = int(round(server_delta_val))
+            count_delta, _sum_delta = load_server_delta(before_path, after_path, require_sum=False)
+            server_delta = count_delta
             reconcile(summary["request_count"], server_delta, args.users)
         except ValueError as exc:
             print(f"Error during reconciliation: {exc}", file=sys.stderr)
