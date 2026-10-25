@@ -1,0 +1,3 @@
+IMAGE             ID             DISK USAGE   CONTENT SIZE   EXTRA
+stress-api:dev    d126409ffdfa        750MB          169MB        
+stress-api:onnx   e65a8c84dda7        474MB          113MB        

@@ -1,0 +1,12 @@
+# Docker Compose override file for ONNX Runtime serving backend.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.onnx.yml up -d --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.onnx
+    image: stress-api:onnx
+    environment:
+      STRESS_BACKEND: onnx

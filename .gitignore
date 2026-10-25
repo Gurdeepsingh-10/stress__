@@ -68,3 +68,5 @@ logs/
 
 # Load test history CSV (percentiles are cumulative; summary stats/failures remain tracked)
 docs/results/loadtest/*_stats_history.csv
+
+!Dockerfile.onnx

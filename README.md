@@ -439,7 +439,26 @@ Function-level benchmark (PredictRequest to probability, one thread, no HTTP; 20
 | scikit-learn, numpy row | 517.7 us / 512.3 us |
 | ONNX Runtime | 17.7 us / 17.4 us |
 
-That is 90.7x and 92.1x against the DataFrame path and 29.3x and 29.4x against the numpy path. Most of the gap is per-call pandas and scikit-learn overhead on a single row, not the model arithmetic (17 features, logistic regression). These numbers cover the model call only, on one Windows machine; the effect on API request latency is not measured here.
+That is 90.7x and 92.1x against the DataFrame path and 29.3x and 29.4x against the numpy path. Most of the gap is per-call pandas and scikit-learn overhead on a single row, not the model arithmetic (17 features, logistic regression). These numbers cover the model call only, on one Windows machine; the effect on API request latency is measured in the next subsection.
+
+### scikit-learn vs ONNX backend under load
+
+The same protocol as above (interleaved warm-up and measured runs, 5/20/50 users, 3 repeats, closed loop, one uvicorn worker, request counts reconciled against Prometheus) was run on both backends in one session on the same laptop, scikit-learn first and ONNX second, on the current code (`docs/results/loadtest-sklearn-rerun/` and `docs/results/loadtest-onnx/`). Reproduce with `docker compose -f docker-compose.yml -f docker-compose.onnx.yml up -d --build` and `.\loadtest\run_series.ps1 -Out <dir>`. The earlier series above was taken in a different session and is not used for this comparison: this scikit-learn rerun's first-repeat throughput is 13-14% lower than that series', so absolute numbers are not comparable across sessions.
+
+| Users | Backend | Throughput req/s | p50 ms | p95 ms | p99 ms | Server mean ms |
+| ---: | :--- | ---: | ---: | ---: | ---: | ---: |
+| 5 | scikit-learn | 264.75 | 18.00 | 23.00 | 28.00 | 2.13 |
+| 5 | ONNX | 451.62 | 10.00 | 15.00 | 23.00 | 0.57 |
+| 20 | scikit-learn | 286.92 | 65.00 | 96.00 | 140.00 | 2.07 |
+| 20 | ONNX | 499.88 | 37.00 | 55.00 | 79.00 | 0.90 |
+| 50 | scikit-learn | 277.53 | 170.00 | 240.00 | 290.00 | 2.21 |
+| 50 | ONNX | 454.42 | 100.00 | 150.00 | 220.00 | 1.25 |
+
+Medians of three repeats; zero failures in all 18 runs; ranges are in the two `summary.md` files. ONNX throughput was 1.71x, 1.74x and 1.64x that of scikit-learn at 5, 20 and 50 users, and median client latency was 44%, 43% and 41% lower. Both series lost throughput from repeat 1 to repeat 3 (about 24-30% for scikit-learn, about 18-23% for ONNX), so the repeat-to-repeat ranges are wide; compared within the same repeat index, the throughput ratio ranges from 1.64x to 2.01x over the nine pairs, and from 1.74x to 1.76x using repeat 1 only. The cause of the decline was not isolated. 'Server mean' is the /predict handler body only; it fell from 2.07-2.21 ms to 0.57-1.25 ms. At 5 users the 1.56 ms drop is close to the 1.59 ms function-level saving measured above, while at 20 and 50 users the drop is smaller and the ONNX handler mean grows with load although the model call itself takes about 18 us, which points to scheduling and CPU contention rather than model compute (not isolated).
+
+Image size (`docker images`, Docker Desktop on WSL2; `docs/results/onnx/image_sizes.txt`): `stress-api:dev` is 750 MB disk usage / 169 MB content size and `stress-api:onnx` is 474 MB / 113 MB, 37% and 33% smaller. The ONNX image contains no scikit-learn, joblib, pandas or scipy (`import sklearn` fails inside the container).
+
+Caveats: ONNX ran after scikit-learn in the same session and a reverse-order run was not done; one machine, the load generator shares the CPU with the API, zero think time, one worker. These are not production-throughput claims.
 
 ### Endpoints
 
