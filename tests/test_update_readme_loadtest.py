@@ -17,6 +17,7 @@ from scripts.update_readme_loadtest import (
     SECTION_NOTES,
     START_MARKER,
     main,
+    update_readme_content,
 )
 
 
@@ -114,6 +115,36 @@ def test_multiline_notes_paragraph_joined_with_single_space(tmp_path: Path) -> N
     content = readme.read_text(encoding="utf-8")
     assert "Line one of notes. Line two of notes." in content
     assert "Line one of notes.\nLine two of notes." not in content
+
+
+def test_notes_stops_at_blank_line_ignoring_second_paragraph(tmp_path: Path) -> None:
+    readme = tmp_path / "README.md"
+    summary = tmp_path / "summary.md"
+
+    first_paragraph = "First synthetic notes paragraph."
+    second_paragraph = "Second paragraph must not be copied."
+    notes = f"{first_paragraph}\n\n{second_paragraph}"
+
+    readme_text = _make_sample_readme()
+    summary_text = _make_sample_summary(notes=notes)
+    readme.write_text(readme_text, encoding="utf-8")
+    summary.write_text(summary_text, encoding="utf-8")
+
+    result = update_readme_content(readme_text, summary_text, summary)
+
+    rc = main(["--readme", str(readme), "--summary", str(summary)])
+    assert rc == 0
+    content = readme.read_text(encoding="utf-8")
+    assert content == result
+
+    # a. the first paragraph text is in the result
+    assert first_paragraph in result
+    # b. "Second paragraph must not be copied." is NOT in the result
+    assert second_paragraph not in result
+    # c. the result's notes block equals the first paragraph only
+    inner = result.split(START_MARKER)[1].split(END_MARKER)[0].strip()
+    _, notes_block, _ = inner.split("\n\n")
+    assert notes_block == first_paragraph
 
 
 def test_idempotent(tmp_path: Path) -> None:
