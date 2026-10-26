@@ -13,7 +13,7 @@ from typing import Literal
 from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from stress.api.metrics import AppMetrics, init_metrics
@@ -148,6 +148,10 @@ def create_app(
                 err_dict["input"] = str(input_val)
             errors.append(err_dict)
         return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse("/docs")
 
     @app.get("/health", response_model=HealthResponse)
     def health(request: Request) -> HealthResponse:

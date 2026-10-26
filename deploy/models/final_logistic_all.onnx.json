@@ -1,0 +1,32 @@
+{
+  "source_joblib_sha256": "5ce9b1ce3c73e6b005b8f077d516aeb627a2b01be0d8040e7e0d53c8ce00e7db",
+  "onnx_sha256": "68b26e6d6dce6c0a59ced26ede3d7a29ffb11829d93cd2bb9b2cd8b0d37411e6",
+  "opset": 17,
+  "n_features": 17,
+  "features": [
+    "hrv_mean_hr",
+    "hrv_hr_std",
+    "hrv_sdnn",
+    "hrv_rmssd",
+    "hrv_pnn50",
+    "hrv_num_beats",
+    "eda_mean",
+    "eda_std",
+    "eda_min",
+    "eda_max",
+    "eda_slope",
+    "eda_num_peaks",
+    "temp_mean",
+    "temp_std",
+    "temp_slope",
+    "acc_magnitude_mean",
+    "acc_magnitude_std"
+  ],
+  "library_versions": {
+    "skl2onnx": "1.20.0",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.0",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.4.6"
+  }
+}

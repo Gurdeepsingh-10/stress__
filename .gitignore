@@ -70,3 +70,4 @@ logs/
 docs/results/loadtest/*_stats_history.csv
 
 !Dockerfile.onnx
+!deploy/models/*.onnx

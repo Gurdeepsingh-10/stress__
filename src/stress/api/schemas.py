@@ -21,7 +21,32 @@ class PredictRequest(BaseModel):
     quality is low (fewer than 10 peaks detected in the window).
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "hrv_mean_hr": 72.0,
+                    "hrv_hr_std": 8.5,
+                    "hrv_sdnn": 55.0,
+                    "hrv_rmssd": 42.0,
+                    "hrv_pnn50": 0.18,
+                    "hrv_num_beats": 72,
+                    "eda_mean": 4.2,
+                    "eda_std": 0.35,
+                    "eda_min": 3.6,
+                    "eda_max": 5.1,
+                    "eda_slope": 0.002,
+                    "eda_num_peaks": 3,
+                    "temp_mean": 33.1,
+                    "temp_std": 0.12,
+                    "temp_slope": 0.0005,
+                    "acc_magnitude_mean": 1.02,
+                    "acc_magnitude_std": 0.06,
+                }
+            ]
+        },
+    )
 
     # HRV features (BVP derived) — required, nullable when peak detection is poor
     hrv_mean_hr: float | None = Field(

@@ -518,6 +518,8 @@ HRV interval features (`hrv_mean_hr`, `hrv_hr_std`, `hrv_sdnn`, `hrv_rmssd`, `hr
 
 ---
 
+Data terms: WESAD may be used for scientific, non-commercial purposes provided that credit is given to the owners (dataset page: https://www.eti.uni-siegen.de/ubicomp/home/datasets/icmi18/; UCI: https://doi.org/10.24432/C57K5T). This repository is a non-commercial research demo and not a medical device; the model weights published under deploy/models are derived from that data.
+
 ## Citation
 
 ```bibtex

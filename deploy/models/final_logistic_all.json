@@ -1,0 +1,43 @@
+{
+  "model_name": "logistic_all",
+  "model_version": "1.0.0",
+  "target": "label_binary",
+  "features": [
+    "hrv_mean_hr",
+    "hrv_hr_std",
+    "hrv_sdnn",
+    "hrv_rmssd",
+    "hrv_pnn50",
+    "hrv_num_beats",
+    "eda_mean",
+    "eda_std",
+    "eda_min",
+    "eda_max",
+    "eda_slope",
+    "eda_num_peaks",
+    "temp_mean",
+    "temp_std",
+    "temp_slope",
+    "acc_magnitude_mean",
+    "acc_magnitude_std"
+  ],
+  "n_features": 17,
+  "training_samples": 1015,
+  "class_counts": {
+    "0": 713,
+    "1": 302
+  },
+  "classes_": [
+    0,
+    1
+  ],
+  "trained_at_utc": "2026-10-20T21:07:25.397679+00:00",
+  "git_commit": "c8767dccf7a25b3810a40c432ddf583b9c3af38f",
+  "git_dirty": false,
+  "environment": {
+    "python": "3.11.9",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.4.6",
+    "joblib": "1.6.0"
+  }
+}
