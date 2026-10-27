@@ -535,6 +535,16 @@ Data terms: WESAD may be used for scientific, non-commercial purposes provided t
 
 ---
 
+## Live demo
+
+- A running instance is at https://stress-demo.onrender.com/docs (interactive API docs; use "Try it out" on POST /predict). Also: /health and /model-info.
+- It runs on a Render free web service, built from Dockerfile.deploy: ONNX backend, model files from deploy/models baked into the image.
+- Cold start: Render's documentation says free web services spin down after 15 minutes without inbound traffic and take about a minute to start again. In one measurement of mine (2026-10-27, first /health request after the service had been idle overnight) the request took 22.91 s. That is a single observation, not a benchmark, so the first request after idle can be slow.
+- The example payload in /docs is synthetic: invented values, not a row from the dataset. It scores a low stress probability; edit the values to explore.
+- The endpoint has no authentication. Do not send personal or health data. This is a research demonstration and not a medical device. Data terms for WESAD are in the "Data terms" paragraph in the Citation section.
+
+---
+
 ## Roadmap
 
 - ~~FastAPI REST endpoints for real-time window ingestion and prediction.~~ **Done** — `src/stress/api/` (`schemas.py`, `model_loader.py`, `main.py`) and `scripts/train_final_model.py`.
@@ -544,5 +554,5 @@ Data terms: WESAD may be used for scientific, non-commercial purposes provided t
 - Grafana monitoring dashboard. *(future)*
 - ~~Load testing harness using Locust.~~ **Done** — `loadtest/locustfile.py`, `scripts/summarize_loadtest.py`, `scripts/aggregate_loadtest.py`, results in `docs/results/loadtest/`.
 - ~~ONNX model export for low-latency scoring.~~ **Done** — `scripts/export_onnx.py`, `src/stress/api/onnx_backend.py`; parity checked on all 1015 rows; function-level benchmark in `docs/results/onnx/`.
-- - ~~Cloud deployment.~~ **Done** — free-tier Render web service built from `Dockerfile.deploy` with the ONNX model files in `deploy/models/`; see "Live demo".
-- Edge deployment. *(future)*
+   - ~~Cloud deployment.~~ **Done** — free-tier Render web service built from `Dockerfile.deploy` with the ONNX model files in `deploy/models/`; see "Live demo".
+   - Edge deployment. *(future)*
