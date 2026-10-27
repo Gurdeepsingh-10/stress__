@@ -311,7 +311,15 @@ def format_calibration_report(
     lines.extend([header, divider])
 
     for _, row in diag_df.iterrows():
-        s = str(row["subject"])
+        subj = row["subject"]
+        if isinstance(subj, (int, np.integer)):
+            s = str(subj)
+        else:
+            try:
+                f_val = float(subj)
+                s = str(int(f_val)) if f_val.is_integer() else str(subj)
+            except (ValueError, TypeError):
+                s = str(subj)
         g_hr = (
             f"{row[f'gap_z_{features[0]}']:+.4f}"
             if not np.isnan(row[f"gap_z_{features[0]}"])

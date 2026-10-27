@@ -255,6 +255,7 @@ The personalization pipeline was verified using automated synthetic tests and ma
 4. **Unexplained performance losses**: Method A centering led to substantial performance decreases in 4 of 15 subjects under the primary condition (losses between $-0.0829$ and $-0.1874$ macro-F1).
 5. **Rest requirement**: Practical calibration requires an initial resting period of approximately 2 to 5.5 minutes ($k=3$ corresponds to 2 minutes; $k=10$ corresponds to 5.5 minutes). In real-world settings, assuming rest without verification may corrupt calibration values.
 6. **Intended use**: This software is an algorithmic benchmark and wellness tool, not a diagnostic medical device.
+7. The deployed model (final_logistic_all) is fit on all windows from all subjects and has no held-out score; the leave-one-subject-out figures describe the evaluation protocol, not this exact fitted model.
 
 ---
 

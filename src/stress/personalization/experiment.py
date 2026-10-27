@@ -202,7 +202,7 @@ def aggregate_conditions(
                 # zero_method='wilcox' discards zero deltas
                 res = wilcoxon(deltas_arr, zero_method="wilcox")
                 wilcoxon_p = float(res.pvalue)
-            except Exception:
+            except ValueError:
                 wilcoxon_p = 1.0
 
         is_primary = bool(
