@@ -292,8 +292,8 @@ python scripts/run_personalization.py --features data/processed/features_phase2.
 ### 6. Export results
 Copy `data/processed/personalization_per_subject.csv` to `docs/results/`, then run:
 ```bash
-python -c "import pandas as pd; from stress.personalization.experiment import aggregate_conditions, format_summary_table; d=pd.read_csv('data/processed/personalization_per_subject.csv'); s=aggregate_conditions(d); s.to_csv('docs/results/personalization_summary.csv', index=False); open('docs/results/personalization_summary.txt','w',encoding='utf-8').write(format_summary_table(s)+'\n')"
-python -c "import mlflow; mlflow.set_tracking_uri('sqlite:///mlflow.db'); df=mlflow.search_runs(experiment_names=['loso_baselines']); keep=[c for c in df.columns if c.startswith(('params.','metrics.'))]; df[keep].round(4).to_csv('docs/results/loso_baselines.csv', index=False)"
+python scripts/export_results.py loso-baselines
+python scripts/export_results.py personalization-summary
 ```
 
 ### 7. Calibration quality diagnostic (optional)
