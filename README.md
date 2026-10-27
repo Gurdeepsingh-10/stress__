@@ -544,4 +544,5 @@ Data terms: WESAD may be used for scientific, non-commercial purposes provided t
 - Grafana monitoring dashboard. *(future)*
 - ~~Load testing harness using Locust.~~ **Done** — `loadtest/locustfile.py`, `scripts/summarize_loadtest.py`, `scripts/aggregate_loadtest.py`, results in `docs/results/loadtest/`.
 - ~~ONNX model export for low-latency scoring.~~ **Done** — `scripts/export_onnx.py`, `src/stress/api/onnx_backend.py`; parity checked on all 1015 rows; function-level benchmark in `docs/results/onnx/`.
-- Cloud or edge deployment. *(future)*
+- - ~~Cloud deployment.~~ **Done** — free-tier Render web service built from `Dockerfile.deploy` with the ONNX model files in `deploy/models/`; see "Live demo".
+- Edge deployment. *(future)*
