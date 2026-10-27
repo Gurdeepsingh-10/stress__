@@ -405,6 +405,14 @@ No other request counts or metric values from this run are claimed.
 
 - **Container without network after failed port bind**: In one observed case a failed port bind left a container without network; `docker compose down` then `docker compose up` fixed it.
 
+### Grafana dashboard
+
+- A pre-provisioned Grafana dashboard ("Stress API") reads the Prometheus metrics. It is an optional Compose override: docker-compose.grafana.yml; files in monitoring/grafana/.
+- Start it with (PowerShell): set $env:GRAFANA_ADMIN_PASSWORD to a password of your choice, then run: docker compose -f docker-compose.yml -f docker-compose.grafana.yml up -d --build ; Grafana is at http://127.0.0.1:3000 (bound to localhost only), user admin, the password you set. The compose file refuses to start without GRAFANA_ADMIN_PASSWORD. Image: grafana/grafana:13.2.4 (pinned).
+- Panels: HTTP request rate by status, predict latency p50/p95/p99, prediction rate by label, model loaded.
+- Verified locally against the running stack with a short synthetic request loop; all four panels showed data. The latency quantiles are interpolated from histogram buckets, so they are coarse. The dashboard runs only in the local Compose stack; the Render demo has no Prometheus or Grafana.
+- Static tests (tests/test_grafana_files.py) check that dashboard queries reference only metrics defined in the code, datasource ids match, and the compose file stays pinned, localhost-bound and password-required; they do not start Docker.
+
 ### Load testing
 
 Locust closed-loop test, zero think time, POST /predict cycling through the 1,015 real feature rows from the processed WESAD feature file (not committed). For each of 5, 20 and 50 users: a 15 s warm-up, then a 70 s measured run with --reset-stats and the spawn rate equal to the user count; three repeats, interleaved (5, 20, 50, 5, 20, 50, ...); the API container was restarted before the series. The series script is loadtest/run_series.ps1.
@@ -551,7 +559,7 @@ Data terms: WESAD may be used for scientific, non-commercial purposes provided t
 - ~~Docker containerization.~~ **Done** — Multi-stage `Dockerfile` with non-root UID 10001, healthcheck, and read-only runtime model mount.
 - ~~Docker Compose orchestration.~~ **Done** — `docker-compose.yml` with API + Prometheus services; model bind mount; `depends_on: service_healthy`.
 - ~~Prometheus metrics instrumentation.~~ **Done** — Per-app `CollectorRegistry`; `stress_http_requests_total`, `stress_predict_latency_seconds`, `stress_predictions_total`, `stress_model_loaded`; `/metrics` endpoint; `prom/prometheus:v3.15.1` scrape config.
-- Grafana monitoring dashboard. *(future)*
+- ~~Grafana monitoring dashboard.~~ **Done** — `docker-compose.grafana.yml` and `monitoring/grafana/`.
 - ~~Load testing harness using Locust.~~ **Done** — `loadtest/locustfile.py`, `scripts/summarize_loadtest.py`, `scripts/aggregate_loadtest.py`, results in `docs/results/loadtest/`.
 - ~~ONNX model export for low-latency scoring.~~ **Done** — `scripts/export_onnx.py`, `src/stress/api/onnx_backend.py`; parity checked on all 1015 rows; function-level benchmark in `docs/results/onnx/`.
    - ~~Cloud deployment.~~ **Done** — free-tier Render web service built from `Dockerfile.deploy` with the ONNX model files in `deploy/models/`; see "Live demo".
