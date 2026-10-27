@@ -5,6 +5,8 @@ All tests use synthetic data only with fixed seeds. No real data is loaded.
 
 from __future__ import annotations
 
+import pathlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -315,10 +317,93 @@ def test_cli_parse_args() -> None:
     assert custom_args.mlflow_uri == "custom_uri"
 
 
-def test_cli_missing_file_returns_1(tmp_path: pytest.TempPathFactory) -> None:
+def test_cli_missing_file_returns_1(tmp_path: pathlib.Path) -> None:
     """CLI returns 1 when features file does not exist."""
     from scripts.run_personalization import main
 
     missing_path = str(tmp_path / "nonexistent.csv")
     exit_code = main(["--features", missing_path])
     assert exit_code == 1
+
+
+def test_wilcoxon_exception_handling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When wilcoxon raises ValueError, p-value falls back to 1.0; RuntimeError propagates."""
+    import stress.personalization.experiment as exp_mod
+
+    per_sub_df = pd.DataFrame(
+        [
+            # k=0 reference condition
+            {
+                "subject": 1,
+                "method": "method_a",
+                "model": "logistic",
+                "group": "all",
+                "k": 0,
+                "macro_f1": 0.5,
+                "recall_stress": 0.5,
+                "recall_not_stress": 0.5,
+                "roc_auc": 0.5,
+                "n_eval": 10,
+                "n_eval_stress": 5,
+                "theta": 0.5,
+            },
+            {
+                "subject": 2,
+                "method": "method_a",
+                "model": "logistic",
+                "group": "all",
+                "k": 0,
+                "macro_f1": 0.5,
+                "recall_stress": 0.5,
+                "recall_not_stress": 0.5,
+                "roc_auc": 0.5,
+                "n_eval": 10,
+                "n_eval_stress": 5,
+                "theta": 0.5,
+            },
+            # k=10 condition with non-zero paired deltas
+            {
+                "subject": 1,
+                "method": "method_a",
+                "model": "logistic",
+                "group": "all",
+                "k": 10,
+                "macro_f1": 0.8,
+                "recall_stress": 0.8,
+                "recall_not_stress": 0.8,
+                "roc_auc": 0.8,
+                "n_eval": 10,
+                "n_eval_stress": 5,
+                "theta": 0.5,
+            },
+            {
+                "subject": 2,
+                "method": "method_a",
+                "model": "logistic",
+                "group": "all",
+                "k": 10,
+                "macro_f1": 0.9,
+                "recall_stress": 0.9,
+                "recall_not_stress": 0.9,
+                "roc_auc": 0.9,
+                "n_eval": 10,
+                "n_eval_stress": 5,
+                "theta": 0.5,
+            },
+        ]
+    )
+
+    def mock_wilcoxon_value_error(*args: object, **kwargs: object) -> object:
+        raise ValueError("mock zero differences error")
+
+    monkeypatch.setattr(exp_mod, "wilcoxon", mock_wilcoxon_value_error)
+    summary_df = exp_mod.aggregate_conditions(per_sub_df)
+    k10_row = summary_df[summary_df["k"] == 10].iloc[0]
+    assert k10_row["wilcoxon_p"] == 1.0
+
+    def mock_wilcoxon_runtime_error(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("unexpected computational failure")
+
+    monkeypatch.setattr(exp_mod, "wilcoxon", mock_wilcoxon_runtime_error)
+    with pytest.raises(RuntimeError, match="unexpected computational failure"):
+        exp_mod.aggregate_conditions(per_sub_df)

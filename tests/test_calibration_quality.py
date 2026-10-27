@@ -306,3 +306,47 @@ def test_cli_parse_args() -> None:
     custom = parse_args(["--features", "f.csv", "--results", "r.csv"])
     assert custom.features.name == "f.csv"
     assert custom.results.name == "r.csv"
+
+
+def test_format_calibration_report_subject_ids_not_floats() -> None:
+    """Diagnostic report formats float-typed subject IDs as integers without trailing .0."""
+    diag_df = pd.DataFrame(
+        [
+            {
+                "subject": 2.0,
+                "gap_z_hrv_mean_hr": 0.1234,
+                "gap_z_eda_mean": -0.5678,
+                "gap_z_temp_mean": 0.0,
+                "delta_f1": 0.05,
+                "delta_stress_recall": 0.10,
+            },
+            {
+                "subject": 3.0,
+                "gap_z_hrv_mean_hr": 0.4321,
+                "gap_z_eda_mean": -0.8765,
+                "gap_z_temp_mean": 0.01,
+                "delta_f1": -0.02,
+                "delta_stress_recall": -0.05,
+            },
+            {
+                "subject": 15.0,
+                "gap_z_hrv_mean_hr": 0.2,
+                "gap_z_eda_mean": 0.3,
+                "gap_z_temp_mean": -0.1,
+                "delta_f1": 0.01,
+                "delta_stress_recall": 0.02,
+            },
+        ]
+    )
+    assert np.issubdtype(diag_df["subject"].dtype, np.floating)
+
+    report = format_calibration_report(diag_df=diag_df, correlations=[])
+    lines = report.splitlines()
+
+    assert any(line.startswith("2 ") for line in lines)
+    assert any(line.startswith("3 ") for line in lines)
+    assert any(line.startswith("15 ") for line in lines)
+
+    assert "2.0" not in report
+    assert "3.0" not in report
+    assert "15.0" not in report
