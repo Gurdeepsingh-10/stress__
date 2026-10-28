@@ -6,8 +6,8 @@ Provides subcommands to export:
    save CSV and text summary.
 
 Usage:
-    .venv/Scripts/python.exe -m scripts.export_results loso-baselines
-    .venv/Scripts/python.exe -m scripts.export_results personalization-summary
+    python scripts/export_results.py loso-baselines
+    python scripts/export_results.py personalization-summary
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def export_loso_baselines(
         return 1
 
     df = mlflow.search_runs(experiment_names=[experiment_name])
-    keep = [c for c in df.columns if c.startswith(("params.", "metrics."))]
+    keep = sorted([c for c in df.columns if c.startswith(("params.", "metrics."))])
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df[keep].round(4).to_csv(out_path, index=False)

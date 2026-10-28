@@ -188,3 +188,53 @@ def test_missing_input_returns_1(tmp_path: pathlib.Path) -> None:
 
     ret_loso = main(["loso-baselines", "--tracking-uri", f"sqlite:///{missing_db}"])
     assert ret_loso == 1
+
+
+def test_export_loso_baselines_column_order_deterministic(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CSV header equals sorted params./metrics. columns even when search_runs
+    returns them in reverse-sorted order.
+    """
+    import scripts.export_results as exp_mod
+
+    db_path = tmp_path / "mlflow_order.db"
+    tracking_uri = f"sqlite:///{db_path}"
+    exp_name = "test_order_experiment"
+
+    mlflow.set_tracking_uri(tracking_uri)
+    exp_id = mlflow.create_experiment(exp_name)
+
+    with mlflow.start_run(experiment_id=exp_id, run_name="run_1"):
+        mlflow.log_param("model_name", "logistic")
+        mlflow.log_param("feature_group", "all")
+        mlflow.log_metric("macro_f1", 0.8548)
+        mlflow.log_metric("recall_class_0", 0.7654)
+        mlflow.set_tag("run_tag", "tag_val")
+
+    # Real search_runs to get what columns exist
+    real_df = mlflow.search_runs(experiment_names=[exp_name])
+    pm_cols = [c for c in real_df.columns if c.startswith(("params.", "metrics."))]
+    sorted_header = sorted(pm_cols)
+    reversed_cols = list(reversed(sorted_header))
+
+    # Build a reversed-order DataFrame
+    other_cols = [c for c in real_df.columns if c not in pm_cols]
+    reversed_df = real_df[other_cols + reversed_cols].copy()
+
+    def mock_search_runs(*args: object, **kwargs: object) -> pd.DataFrame:
+        return reversed_df
+
+    monkeypatch.setattr(exp_mod.mlflow, "search_runs", mock_search_runs)
+
+    out_csv = tmp_path / "order_out.csv"
+    ret = export_loso_baselines(
+        tracking_uri=tracking_uri,
+        experiment_name=exp_name,
+        out_path=out_csv,
+    )
+    assert ret == 0
+    assert out_csv.exists()
+
+    written_header = out_csv.read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert written_header == sorted_header
